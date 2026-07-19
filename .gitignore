@@ -1,0 +1,11 @@
+/context/
+__pycache__/
+*.pyc
+.env
+data/raw/
+data/processed/
+.venv/
+venv/
+node_modules/
+.agents/
+docs/
