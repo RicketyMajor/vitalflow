@@ -5,3 +5,4 @@ nbconvert
 ipykernel
 duckdb
 pyarrow
+requests
