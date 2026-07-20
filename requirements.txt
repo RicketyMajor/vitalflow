@@ -3,3 +3,5 @@ matplotlib
 jupyter
 nbconvert
 ipykernel
+duckdb
+pyarrow
