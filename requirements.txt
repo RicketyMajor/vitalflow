@@ -6,3 +6,4 @@ ipykernel
 duckdb
 pyarrow
 requests
+scipy
