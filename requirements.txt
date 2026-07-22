@@ -8,3 +8,6 @@ pyarrow
 requests
 scipy
 geopy
+ydata-profiling
+sweetviz
+dtale
