@@ -19,3 +19,6 @@ data/processed/
 
 # Generated EDA reports — regenerate from notebooks/03_eda_comprehensive.ipynb
 notebooks/*_EDA_Report.html
+
+# Agent instructions — local only for now
+CLAUDE.md
