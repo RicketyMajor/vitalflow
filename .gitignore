@@ -1,11 +1,21 @@
-/context/
+# Python
 __pycache__/
 *.pyc
 .env
-data/raw/
-data/processed/
 .venv/
 venv/
+
+# Node
 node_modules/
-.agents/
-docs/
+
+# Agent tooling & working context — personal aids, not part of the project
+/.agents/
+/.claude/
+/context/
+
+# Data is local-only — too large for git. Paths documented in context/sources/index.md
+data/raw/
+data/processed/
+
+# Generated EDA reports — regenerate from notebooks/03_eda_comprehensive.ipynb
+notebooks/*_EDA_Report.html
