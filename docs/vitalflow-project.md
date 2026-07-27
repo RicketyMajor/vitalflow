@@ -88,14 +88,20 @@ seasons, using the series' own history:
 Three weeks, and sharp. No predictor tested moves it. This is the single measurement the project's
 scope now rests on.
 
+> **Corrected 2026-07-27 on implementation.** These figures come from `03e`, which fitted the
+> facility climatology and scale over every year *including the test season* — and the anomaly those
+> two quantities define is the target. Refitted per test season on earlier years only, the wall sits
+> at **0.772 (h=1) and 0.450 (h=2)**. The shape of the wall and the conclusion drawn from it are
+> unchanged; the levels are about 6 and 15 points lower. See §9.1.
+
 ## 6. Methodology: The Machine Learning Life Cycle
 
 | Phase | Mapping to VitalFlow | Status |
 | :--- | :--- | :--- |
 | **1. Data Engineering** | DEIS weekly ER Parquet; canonical loaders with the target definition, categorical normalisation and a COVID regime flag; WHO FluNet virological series | 🟢 Complete for the current scope |
 | **2. Analysis** | Variance decomposition, horizon sweep, spatial lead-lag, exogenous indicator tests | 🟢 Complete — `03b` through `03e` |
-| **3. Modeling** | National wave forecast → facility allocation → surge classifier, evaluated on recall/precision at a fixed alert budget | 🔴 Next |
-| **4. Deployment & Serving** | Weekly batch job producing a ranked alert list; API and interface | 🔴 Not started |
+| **3. Modeling** | Three stages built and measured, then collapsed by ablation to one classifier on six facility features; evaluated on recall/precision at a fixed alert budget | 🟢 Complete — §9, AC2 met |
+| **4. Deployment & Serving** | Alert list written to Parquet (§9.1); weekly refresh job and interface still to build | 🟡 Started |
 | **5. Monitoring** | Score each week's alert list against what actually happened; retrain on schedule | 🔴 Not started |
 
 Note that phase 2 is listed separately. It consumed four notebooks and eliminated five candidate
@@ -201,22 +207,97 @@ Established facts from the audits, not risks:
 
 ## 9. Model Design
 
-The architecture is dictated by the measured variance decomposition (`03c`): 60.1% between
-facilities, 20.5% seasonal within facility, 13.0% anomaly. The first two components are free — a
-facility identifier and a calendar produce them — so the model exists to forecast the third, and the
-third is one national series (`03d`).
+> **Rewritten 2026-07-27 after implementation.** This section described a three-stage architecture —
+> national wave → factor allocation → classifier. All three were built, measured, and scored
+> (`src/models/train_model.py`). An ablation then showed the first two contribute under 0.01 recall
+> to the alert list. What ships is §9.1; §9.2 records the three-stage measurement and why it was
+> collapsed. Numbers below come from running the module, not from a notebook.
 
-### 9.1. Stage 1 — the national wave
+### 9.1. What ships
+
+One `HistGradientBoostingClassifier` on P(surge) per facility-week, over **six features**:
+
+| feature | meaning |
+| :--- | :--- |
+| `z`, `z_l1`, `z_l2` | the facility's standardized demand anomaly now and one and two weeks back |
+| `z_d4` | its four-week change |
+| `clim_z` | its seasonal position at the target week — where in its own year the week sits |
+| `week` | week of year |
+
+Ranked to fill each facility's own top 10% of weeks, about five alerts a year. Written to
+`data/processed/alert_list.parquet` — one row per (facility, week, horizon) with the probability and
+the alert flag. That file is the serving interface; nothing downstream imports the model.
+
+**Measured, h = 1, expanding window, scored within each test year:**
+
+| | test 2025 | test 2024 |
+| :--- | ---: | ---: |
+| climatology (the baseline to beat) | 0.231 / 0.185 | 0.253 / 0.352 |
+| **this model** | **0.306 / 0.245** | **0.393 / 0.547** |
+
+(recall / precision at a fixed alert budget.) At h = 2: 0.258 / 0.206 and 0.351 / 0.488.
+
+Everything fitted — the climatology, the per-facility scale, the p90 surge threshold — comes from
+seasons strictly before the test year. Training rows start post-COVID (2022): a p90 fitted on
+post-COVID demand would label almost no earlier week a surge, and pre-COVID seasons carry a seasonal
+shape that measurably no longer holds.
+
+### 9.2. What was measured and then collapsed
+
+The three-stage design followed the variance decomposition (`03c`): 60.1% between facilities, 20.5%
+seasonal within facility, 13.0% anomaly. The first two are free — a facility identifier and a
+calendar produce them — so the model existed to forecast the third, and the third looked like one
+national series (`03d`).
+
+It is not that the national series is unforecastable — it is forecastable, at R² 0.772 (h=1) and
+0.450 (h=2), leak-free. It is that **forecasting it adds nothing to the alert list**:
+
+| features | 2025 recall | 2024 recall |
+| :--- | ---: | ---: |
+| all 14 (Stages 1+2+3) | 0.309 | 0.399 |
+| drop the national ones | 0.308 | 0.394 |
+| **the six above** | **0.306** | **0.393** |
+| drop the facility's own history | 0.220 | 0.379 |
+| `03d`'s best composition, incl. neighbour rings | 0.313 | 0.396 |
+
+The national anomaly is by construction the cross-facility mean of the very `z` values the
+classifier already holds per facility. Stage 1 recovers an average the model can already infer from
+the one series that matters to it. Strip the facility's own history instead and the model falls
+*below* climatology in 2025.
+
+Two consequences worth stating plainly. First, `03d`'s reported best of 0.321 / 0.428 does not
+survive a common scorer — the same features give 0.313 / 0.396 here; that gap was protocol, not
+model. Second, Stage 1 retains value as a **reported** figure — "the national wave is rising, R²
+0.77 at one week" is a legitimate thing to show an administrator — but it is not load-bearing, and
+this document previously claimed it was.
+
+### 9.3. Known limits
+
+- **The alert budget is a within-year rank.** Ranking a facility's weeks at a fixed 10% budget uses
+  the whole test year at once; in deployment week 30 must be judged at week 29. Inherited from `03d`
+  and fair between models, but the absolute recall figures are optimistic. The fix is a score
+  threshold calibrated on training years, and it is not done.
+- **The ablation is two holdout years and one seed.** A 0.005 delta is within noise. The claim is
+  "the national wave is negligible here", not "it is exactly zero".
+- **2025 is a quiet season and nothing helps much in it.** 6.9% of facility-weeks above p90 against
+  13.4% in 2024. Handed the *realised* national anomaly, the allocation still does not beat the
+  calendar in 2025 — in a quiet year the surges that occur are local.
+
+### 9.4. The three stages, as built and measured
+
+#### Stage 1 — the national wave
 
 A single weekly series: the cross-facility mean of standardized facility anomalies. Forecast at
 h = 1 and h = 2 from its own recent history (lags 1, 2, 4 and a four-week change), with `RidgeCV`
 selecting the regularisation.
 
-**Measured baseline to beat:** median within-season out-of-sample R² of 0.835 at one week and 0.598
-at two, already achieved by this specification in `03e`. Any added complexity must beat that number
-on the same protocol.
+**Measured, leak-free:** median within-season out-of-sample R² **0.772** at one week and **0.450** at
+two. `03e`'s 0.835 / 0.598 was measured with the climatology fitted on every year *including the
+test season* — the anomaly those quantities define is the target, so that is leakage, and no
+deployed system can do it. The gap lives entirely in seasons with three or four years of
+climatology history; from 2023 on, leaky and leak-free are indistinguishable.
 
-### 9.2. Stage 2 — allocation to facilities
+#### Stage 2 — allocation to facilities
 
 Each facility's forecast is its own week-of-year climatology plus its loading on the national
 anomaly:
@@ -228,7 +309,12 @@ demand_hat[i, w] = climatology[i, week_of_year(w)] + beta[i] * national_anomaly_
 A factor model, matching the variance split directly. `beta[i]` is estimated per facility on the
 training years, shrunk toward the panel mean for facilities with short history.
 
-### 9.3. Stage 3 — the alert list
+**Measured, h = 1:** recall 0.371 vs climatology's 0.253 in 2024 — a large win, precision 0.352 →
+0.516. And 0.224 vs 0.231 in 2025, a small loss. Substituting the *realised* national anomaly for
+the forecast changes 2025 by 0.004: the failure is not that Stage 1 missed that season, it is that
+in a quiet season there is no national signal to allocate.
+
+#### Stage 3 — the alert list
 
 A `HistGradientBoostingClassifier` emitting P(surge) per facility-week, where a surge is a week above
 that facility's own historical 90th percentile. Features: the Stage 2 forecast, the facility's recent
@@ -246,14 +332,12 @@ Scored with an expanding window, one test season at a time, never pooled across 
 credits a model for predicting differences *between* seasons, which nearly produced a false positive
 in `03e`.
 
-**Benchmarks to beat** (surge recall at a fixed budget, h = 1, from `03d`):
+**Benchmarks** (surge recall at a fixed budget, h = 1). `03d` reported climatology 0.243 / 0.257 and
+a best model of 0.321 / 0.428. Re-derived through `score_alerts` so the numbers are commensurable:
+climatology is **0.231 / 0.253** and `03d`'s own feature composition scores **0.313 / 0.396**. Its
+reported best does not survive a common scorer. See §9.1 for what ships.
 
-| | test 2025 | test 2024 |
-| :--- | ---: | ---: |
-| climatology | 0.243 | 0.257 |
-| best current model | 0.321 | 0.428 |
-
-### 9.4. Explicitly excluded
+### 9.5. Explicitly excluded
 
 | Rejected | Reason |
 | :--- | :--- |
@@ -287,7 +371,8 @@ vitalflow/
 ├── src/
 │   ├── data/make_dataset.py        # canonical target + virology loaders, self-check
 │   ├── features/build_features.py  # weekly panel, geodesics, deseasonalization, self-check
-│   └── models/{train,predict}_model.py   # empty stubs — Section 9 goes here
+│   ├── models/train_model.py        # the whole model: three stages, ablation, alert list
+│   └── models/predict_model.py      # empty — write_alert_list covers serving for now
 ├── services/                       # scaffolded, empty
 ├── frontend/                       # scaffolded, empty
 ├── docs/vitalflow-project.md       # this file
@@ -299,13 +384,18 @@ vitalflow/
 
 ## 11. Immediate Next Steps
 
-1. **Implement Stage 1** in `src/models/train_model.py`: the national wave forecast at h = 1 and 2,
-   with the expanding-window backtest as its self-check. Target: reproduce R² 0.835 / 0.598.
-2. **Implement Stages 2 and 3**, and score the alert list against the benchmarks in §9.3. If the
-   classifier does not beat climatology on recall at a fixed budget, it does not ship — regardless of
-   its R².
-3. **Automate the weekly refresh** from the DEIS release, and produce the alert list as a file.
-4. **Build the interface** on top of that file: per facility, the next two weeks' alert status and
-   the seasonal context that justifies it.
+Modelling is done and the acceptance criteria are settled — §9.1 for what ships, `train_model.py`
+for the numbers. What is left:
+
+1. **Turn the alert budget into a score threshold** calibrated on training years. This is the one
+   known optimism in every figure reported here: the 10% budget is currently a within-year rank,
+   which needs the whole test year at once. Deployment cannot.
+2. **Automate the weekly refresh** from the DEIS release to `data/processed/alert_list.parquet`.
+   One classifier on six features, so there is no second pipeline to schedule.
+3. **Build the interface** on top of that file: per facility, the next two weeks' alert status and
+   the seasonal context that justifies it. The national wave forecast belongs here as *context* —
+   it is honest to show and it is not what drives the alerts.
+4. **Re-check the ablation** when a third holdout year exists. The conclusion that the national
+   wave is negligible rests on two years and deltas of 0.005.
 5. **Only then** revisit covariates, against the filter in §8.2: not seasonal, not static, not
    contemporaneous.
