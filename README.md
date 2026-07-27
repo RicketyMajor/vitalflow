@@ -1,55 +1,67 @@
-# VitalFlow: Early Warning System for Hospital Emergency Room Saturation
+# VitalFlow: Early Warning System for Respiratory ER Saturation
 
-VitalFlow is a predictive analytics project designed to forecast the volume and type of emergency room (ER) visits at specific health centers. By correlating historical medical data with external environmental, geographic, and meteorological factors, the system aims to help hospital administrators dynamically allocate resources and optimize operations, transitioning from a reactive to a proactive public healthcare model.
+VitalFlow forecasts weekly respiratory emergency-room demand for each health facility in Chile at a
+**1-to-2-week horizon**, and delivers it as a ranked alert list: for every facility, the weeks most
+likely to exceed its own historical 90th percentile of demand. The lever it serves is operational —
+shift rescheduling, relief staff, contingency beds.
+
+The horizon is short on purpose. It is the horizon the data supports, and Section §5b of
+[`docs/vitalflow-project.md`](docs/vitalflow-project.md) documents in measured terms how that was
+established.
 
 ## Core Objectives
 
-1. Develop a high-accuracy multivariate time series forecasting model using a Temporal Fusion Transformer (TFT).
-2. Engineer an automated data pipeline utilizing open government datasets and weather APIs.
-3. Deploy an interactive web application for hospital administrators to visualize forecasted demand and simulate resource allocation.
+1. Forecast the national respiratory wave at 1–2 weeks, beating the seasonal climatology out of
+   sample, scored **within** each test season.
+2. Convert it into a per-facility alert list that beats climatology on **surge recall and precision
+   at a fixed alert budget** — the metric an administrator actually consumes, rather than R².
+3. Automate the weekly refresh from the DEIS open-data release and put a readable interface on top.
 
-## Architecture and Technology Stack
+## What the data says
 
-The project adopts a distributed architecture to separate heavy machine learning inference from real-time web server operations:
+Four analysis notebooks (`03b`–`03e`) measured the problem before any model was trained, and
+eliminated most of the original plan:
 
-* **Machine Learning Framework:** PyTorch Forecasting (Temporal Fusion Transformer)
-* **Inference Backend:** FastAPI (Python worker for model serving)
-* **Web Server & Real-Time Engine:** Node.js, Express, Socket.io
-* **Message Broker:** Redis (Pub/Sub for communication between Node.js and FastAPI)
-* **Data Processing:** DuckDB (for memory-efficient out-of-core aggregations)
+| Question | Answer |
+| :--- | :--- |
+| Does air pollution predict respiratory ER demand? | Under 0.5 pp of R² once seasonality is removed |
+| Is a panel R² of 0.91 a solved problem? | No — 60% is facility identity, 20% is the calendar, 13% is the anomaly |
+| Do epidemic waves propagate between facilities? | No — one synchronous national wave, symmetric lead-lag at every distance |
+| Does laboratory virological surveillance lead demand? | No — it lags. A specimen exists because a patient already presented |
+| How far ahead is the series forecastable? | **Three weeks.** Within-season R² 0.84 / 0.60 / 0.27 at 1 / 2 / 3 weeks, negative beyond |
 
-## Current Project Status
+## Architecture
 
-The project is currently in the Data Engineering and Exploratory Data Analysis (EDA) phase. 
-* The target variables (Respiratory Urgencies) have been aggregated and analyzed.
-* Data skewness has been normalized.
-* We are currently defining the feature space for the spatial clustering phase using HDBSCAN, which will define organic catchment areas for each emergency room before training the TFT model.
+The measurements dictate a small model, not a large one:
+
+1. **National wave** — one weekly series, `RidgeCV` on its own recent history.
+2. **Allocation** — each facility's climatology plus its loading on the national anomaly (a factor
+   model, matching the measured variance split).
+3. **Alert list** — `HistGradientBoostingClassifier` emitting P(surge) per facility-week, ranked to
+   fill a fixed alert budget.
+
+**Stack:** DuckDB + Parquet for data, scikit-learn for modelling, a weekly batch job for serving.
+No GPU. A Temporal Fusion Transformer and HDBSCAN clustering were the original plan and were dropped
+once the structure they assumed was measured and found absent — see `context/decisions/log.md`.
 
 ## Project Structure
 
-* `data/`: Raw, processed, and external datasets.
-* `notebooks/`: Jupyter notebooks for data exploration, feature engineering, clustering, and baseline modeling.
-* `src/`: Python source code for data ingestion, models, and utility functions.
-* `services/`: Microservices backend containing the machine learning worker, web server, and broker configuration.
-* `frontend/`: User interface with real-time mapping capabilities.
-* `context/`: Project specifications, architectural decisions, and handoff documentation.
+* `data/` — raw, processed and external datasets (local only, gitignored).
+* `notebooks/` — exploration, the statistical audit, and the four analyses that set the scope.
+* `src/` — canonical loaders (`make_dataset.py`, `build_features.py`) and models. Each module runs a
+  self-check when executed directly.
+* `services/`, `frontend/` — scaffolded, not yet implemented.
+* `docs/vitalflow-project.md` — the full project definition: problem, data, hazards, model design.
+* `context/` — working memory: specs, decision log, session handoffs.
 
 ## Getting Started
 
-*(Detailed setup instructions will be provided as the project stabilizes)*
+```bash
+python -m venv venv && venv/Scripts/activate     # Linux/macOS: source venv/bin/activate
+pip install -r requirements.txt
+python src/data/make_dataset.py                  # self-check on the target taxonomy and virology
+python src/features/build_features.py            # self-check on the weekly panel
+```
 
-To set up the initial Python environment for data exploration:
-
-1. Create a virtual environment and activate it.
-2. Install the required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Docker Compose is available for orchestrating the microservices stack locally:
-   ```bash
-   docker-compose up -d
-   ```
-
-## License and Documentation
-
-Detailed documentation regarding architectural decisions, models, and specifications can be found in the `docs/` and `context/` directories.
+The datasets are not distributed with the repository; `context/sources/index.md` lists every source,
+its path and how to refresh it.

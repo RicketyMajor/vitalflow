@@ -28,6 +28,15 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 URGENCIAS_GLOB = str(ROOT / "data" / "processed" / "urgencias_parquet" / "*.parquet")
 MAPPING_CSV = ROOT / "data" / "processed" / "hospital_sinca_dmc_mapping.csv"
+FLUNET_CSV = (
+    ROOT / "data" / "raw" / "Vigilancia Virológica (WHO FluNet)" / "flunet_chile.csv"
+)
+
+# FluNet reports Chile's GISRS laboratory surveillance. Influenza runs from 1997; RSV,
+# adenovirus and parainfluenza only from 2015, which sets the usable start of any analysis
+# that needs them. Rhinovirus/coronavirus/bocavirus start in 2020 and are too short to use.
+VIRUSES = ["INF_ALL", "RSV", "ADENO", "PARAINFLUENZA", "METAPNEUMO"]
+VIROLOGY_START_YEAR = 2015
 
 TARGET_CAUSE = 2  # TOTAL CAUSAS SISTEMA RESPIRATORIO (ER attentions)
 SEVERITY_CAUSE = 7  # CAUSAS SISTEMA RESPIRATORIO (hospitalizations)
@@ -125,6 +134,35 @@ def load_mapping(max_sinca_km=None, max_dmc_km=None):
     return df
 
 
+def load_virology(year_min=VIROLOGY_START_YEAR, year_max=None):
+    """National weekly virological surveillance (WHO FluNet, Chile), as positivity rates.
+
+    One row per ISO (year, week). Two things this function exists to get right:
+
+    * **Sources are summed, not picked.** From 2020 FluNet splits Chile into SENTINEL and
+      NONSENTINEL rows for the same week; before that a single NOTDEFINED row. Taking one
+      source silently halves the series at the 2020 boundary.
+    * **Positivity, not counts.** Weekly specimens processed range from 261 to 7,204, so raw
+      detections mostly measure how much testing happened. Every virus is returned as a
+      share of specimens processed.
+
+    Note for anyone building features from this: FluNet publishes a week roughly two weeks
+    after it ends. A backtest that uses week *t* to forecast *t+h* without imposing that lag
+    is reading data that did not exist yet.
+    """
+    df = pd.read_csv(FLUNET_CSV)
+    df = df[(df.ISO_YEAR >= year_min) & (df.ISO_WEEK != 53)]
+    if year_max is not None:
+        df = df[df.ISO_YEAR <= year_max]
+
+    out = (df.groupby(["ISO_YEAR", "ISO_WEEK"])[["SPEC_PROCESSED_NB"] + VIRUSES]
+           .sum(min_count=1).reset_index())
+    for c in VIRUSES:
+        out[c + "_pos"] = out[c] / out["SPEC_PROCESSED_NB"]
+    out["ALL_pos"] = out[VIRUSES].sum(axis=1) / out["SPEC_PROCESSED_NB"]
+    return out.sort_values(["ISO_YEAR", "ISO_WEEK"], ignore_index=True)
+
+
 def demo():
     """Self-check: the taxonomy assumptions this module is built on must hold."""
     con = duckdb.connect()
@@ -153,6 +191,14 @@ def demo():
 
     print(f"OK  target={parent:,.0f}  subcauses={children:,.0f}  drift={drift:.2e}")
     print(f"OK  panel: {len(df):,} rows, {df['IdEstablecimiento'].nunique()} facilities")
+
+    v = load_virology()
+    assert not v.duplicated(["ISO_YEAR", "ISO_WEEK"]).any(), "sources were not collapsed"
+    assert (v["ISO_WEEK"] <= 52).all(), "week 53 leaked through"
+    rates = v[[c + "_pos" for c in VIRUSES]]
+    assert rates.max().max() <= 1.0, "a positivity rate above 1 means specimens are miscounted"
+    print(f"OK  virology: {len(v):,} weeks, {v.ISO_YEAR.min()}-{v.ISO_YEAR.max()}, "
+          f"peak all-virus positivity {v.ALL_pos.max():.2f}")
 
 
 if __name__ == "__main__":

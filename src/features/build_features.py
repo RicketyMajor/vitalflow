@@ -130,24 +130,29 @@ def load_weekly_pollution(con=None):
     return df[df["iso_week"] != 53]
 
 
-def nearest_station(facilities, stations, max_km=None):
-    """Map each facility to its nearest monitoring station.
+def to_xyz(lat, lon):
+    """Project lat/lon degrees onto 3D Cartesian points on a sphere of Earth's radius.
 
-    Lat/lon degrees are not a metric space, so coordinates are projected onto 3D Cartesian
-    points on a sphere of Earth's radius; Euclidean distance there approximates the
-    great-circle arc closely at these scales, which lets a KD-tree do the search in
-    milliseconds. Chord length is converted back to arc length so the reported km are real
-    surface distances.
+    Degrees are not a metric space. On the sphere, Euclidean (chord) distance approximates
+    the great-circle arc closely at these scales, which is what lets a KD-tree answer
+    neighbour queries in milliseconds. Convert chord back to arc with `chord_to_arc_km`.
     """
-    from scipy.spatial import cKDTree
+    lat, lon = np.radians(np.asarray(lat, float)), np.radians(np.asarray(lon, float))
+    return np.column_stack([
+        EARTH_RADIUS_KM * np.cos(lat) * np.cos(lon),
+        EARTH_RADIUS_KM * np.cos(lat) * np.sin(lon),
+        EARTH_RADIUS_KM * np.sin(lat),
+    ])
 
-    def to_xyz(lat, lon):
-        lat, lon = np.radians(np.asarray(lat, float)), np.radians(np.asarray(lon, float))
-        return np.column_stack([
-            EARTH_RADIUS_KM * np.cos(lat) * np.cos(lon),
-            EARTH_RADIUS_KM * np.cos(lat) * np.sin(lon),
-            EARTH_RADIUS_KM * np.sin(lat),
-        ])
+
+def chord_to_arc_km(chord):
+    """Straight-line distance through the sphere -> surface distance. d = 2R*arcsin(c/2R)."""
+    return 2 * EARTH_RADIUS_KM * np.arcsin(np.clip(np.asarray(chord) / (2 * EARTH_RADIUS_KM), -1, 1))
+
+
+def nearest_station(facilities, stations, max_km=None):
+    """Map each facility to its nearest monitoring station, with real surface distances."""
+    from scipy.spatial import cKDTree
 
     fac = facilities.dropna(subset=["Latitud", "Longitud"]).copy()
     sta = stations.dropna(subset=["latitud", "longitud"]).copy()
@@ -155,11 +160,8 @@ def nearest_station(facilities, stations, max_km=None):
     tree = cKDTree(to_xyz(sta["latitud"], sta["longitud"]))
     chord, idx = tree.query(to_xyz(fac["Latitud"], fac["Longitud"]), k=1)
 
-    # chord -> arc: d_arc = 2R * arcsin(chord / 2R)
     fac["nearest_station"] = sta["estacion"].to_numpy()[idx]
-    fac["station_distance_km"] = 2 * EARTH_RADIUS_KM * np.arcsin(
-        np.clip(chord / (2 * EARTH_RADIUS_KM), -1, 1)
-    )
+    fac["station_distance_km"] = chord_to_arc_km(chord)
     if max_km is not None:
         fac = fac[fac["station_distance_km"] <= max_km]
     return fac
