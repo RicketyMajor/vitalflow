@@ -224,18 +224,28 @@ One `HistGradientBoostingClassifier` on P(surge) per facility-week, over **six f
 | `clim_z` | its seasonal position at the target week — where in its own year the week sits |
 | `week` | week of year |
 
-Ranked to fill each facility's own top 10% of weeks, about five alerts a year. Written to
-`data/processed/alert_list.parquet` — one row per (facility, week, horizon) with the probability and
-the alert flag. That file is the serving interface; nothing downstream imports the model.
+A facility-week is alerted when its P(surge) clears **one national cut, fixed on the previous
+season** — nothing from inside the season being forecast sets it, so the flag is computable a week
+at a time. Written to `data/processed/alert_list.parquet` — one row per (facility, week, horizon)
+with the probability, the cut and the alert flag. That file is the serving interface; nothing
+downstream imports the model.
 
-**Measured, h = 1, expanding window, scored within each test year:**
+**Measured at the operating point, h = 1, expanding window, scored within each test year:**
 
 | | test 2025 | test 2024 |
 | :--- | ---: | ---: |
-| climatology (the baseline to beat) | 0.231 / 0.185 | 0.253 / 0.352 |
-| **this model** | **0.306 / 0.245** | **0.393 / 0.547** |
+| climatology (the baseline to beat) | 0.231 / 0.185 · lift 2.41 | 0.253 / 0.352 · lift 2.65 |
+| **this model** | **0.335 / 0.507 · lift 6.63** | **0.447 / 0.722 · lift 5.43** |
 
-(recall / precision at a fixed alert budget.) At h = 2: 0.258 / 0.206 and 0.351 / 0.488.
+(recall / precision, then precision ÷ base rate.) At h = 2: 0.268 / 0.374 · lift 4.89, and
+0.412 / 0.632 · lift 4.75. Roughly one alert in two lands on a real surge in 2025 and nearly three
+in four in 2024, against 0.185 and 0.352 for the calendar.
+
+**Read lift, not recall, when comparing budget rules.** A prospective cut spends what the season
+deserves — 5.1% of facility-weeks in quiet 2025, 8.2% in wave-year 2024 — so recall figures measured
+at different spends are not the same measurement. Under the earlier within-year rank at a forced 10%
+this model scored 0.306 / 0.245 and 0.393 / 0.547; those numbers remain the ones comparable to `03d`
+and are not deployable, because ranking week 30 against week 45 requires week 45 to have happened.
 
 Everything fitted — the climatology, the per-facility scale, the p90 surge threshold — comes from
 seasons strictly before the test year. Training rows start post-COVID (2022): a p90 fitted on
@@ -273,12 +283,18 @@ this document previously claimed it was.
 
 ### 9.3. Known limits
 
-- **The alert budget is a within-year rank.** Ranking a facility's weeks at a fixed 10% budget uses
-  the whole test year at once; in deployment week 30 must be judged at week 29. Inherited from `03d`
-  and fair between models, but the absolute recall figures are optimistic. The fix is a score
-  threshold calibrated on training years, and it is not done.
-- **The ablation is two holdout years and one seed.** A 0.005 delta is within noise. The claim is
-  "the national wave is negligible here", not "it is exactly zero".
+- **~30% of facilities get no alert at all in a quiet season.** 185 of 609 in 2025, 66 in 2024,
+  under the national cut. Recall went *up* when the cut replaced the rank, so silence is not costing
+  surges — a facility whose season never approaches its own p90 has nothing to warn about. But
+  whether "no alerts this year" reads to a clinician as reassurance or as neglect has not been
+  asked. The per-facility cut is the fallback, at a cost of about 0.7 lift in 2025 and 1.15 in 2024.
+- **The cut is calibrated on one prior season.** For test 2024 that season is 2023, itself trained
+  on 2022 alone. Thin — and the 2024 spend drifting to 11.4% is what that thinness looks like.
+- **The ablation is two holdout years and one seed.** A 0.005 delta is within noise, and there is now
+  direct evidence for that: re-running the identical module moves the neighbour-ring variants by
+  0.002–0.003 recall (0.318 → 0.315 in 2025), presumably `HistGradientBoostingClassifier`'s threaded
+  histogram accumulation. The non-ring rows reproduce exactly. The claim is "the national wave is
+  negligible here", not "it is exactly zero".
 - **2025 is a quiet season and nothing helps much in it.** 6.9% of facility-weeks above p90 against
   13.4% in 2024. Handed the *realised* national anomaly, the allocation still does not beat the
   calendar in 2025 — in a quiet year the surges that occur are local.
@@ -387,15 +403,18 @@ vitalflow/
 Modelling is done and the acceptance criteria are settled — §9.1 for what ships, `train_model.py`
 for the numbers. What is left:
 
-1. **Turn the alert budget into a score threshold** calibrated on training years. This is the one
-   known optimism in every figure reported here: the 10% budget is currently a within-year rank,
-   which needs the whole test year at once. Deployment cannot.
+1. ~~**Turn the alert budget into a score threshold.**~~ **Done 2026-07-28** — a national P(surge)
+   cut fixed on the previous season. The protocol turned out to be pessimistic, not optimistic:
+   lift roughly doubles against the calendar. See §9.1 and the decision log entry.
 2. **Automate the weekly refresh** from the DEIS release to `data/processed/alert_list.parquet`.
-   One classifier on six features, so there is no second pipeline to schedule.
+   One classifier on six features, so there is no second pipeline to schedule — and now that the
+   flag is a threshold rather than a within-year rank, there is nothing that needs the season to
+   be over.
 3. **Build the interface** on top of that file: per facility, the next two weeks' alert status and
    the seasonal context that justifies it. The national wave forecast belongs here as *context* —
-   it is honest to show and it is not what drives the alerts.
+   it is honest to show and it is not what drives the alerts. Decide what a silent facility sees.
 4. **Re-check the ablation** when a third holdout year exists. The conclusion that the national
-   wave is negligible rests on two years and deltas of 0.005.
+   wave is negligible rests on two years and deltas of 0.005 — the same size as the run-to-run
+   noise documented in §9.3.
 5. **Only then** revisit covariates, against the filter in §8.2: not seasonal, not static, not
    contemporaneous.

@@ -8,7 +8,7 @@ already holds per facility. They are kept for reporting and as the record of tha
 
 Read `demo()` output top to bottom -- it is the argument for every choice below.
 
-Four things cost real work to learn and must not be undone:
+Five things cost real work to learn and must not be undone:
 
 * **Scored within season, never pooled.** A pooled R2 across seasons rewards a model for
   predicting differences *between* seasons, which no hospital needs a model for. It nearly
@@ -21,6 +21,10 @@ Four things cost real work to learn and must not be undone:
   produces the same alert list as its forecast despite an R2 of 0.772.
 * **A benchmark must come from this module's own scorer.** `03d` reported 0.321 / 0.428 for its
   best model; the same feature composition scored by `score_alerts` gives 0.313 / 0.396.
+* **Recall is only comparable at equal spend.** What ships alerts on a cut fixed before the season,
+  so the budget is free to drift -- 5.1% of facility-weeks in quiet 2025, 8.2% in 2024. Compare
+  those rows on `lift`, never on `recall`, or a model that merely alerts more looks like a model
+  that predicts better. `prospective_alerts` and the 2026-07-28 decision-log entry.
 
 Spec: context/specs/surge-alert-model.md · Decisions: context/decisions/log.md, 2026-07-27.
 """
@@ -161,29 +165,61 @@ AC2_BASELINE = {2025: {"recall": 0.232, "precision": 0.184},
                 2024: {"recall": 0.252, "precision": 0.351}}
 
 
-def alert_flags(test, pred):
-    """The top `ALERT_SHARE` of each facility's own weeks, ranked by `pred`."""
+def alert_flags(test, pred, thresholds=None):
+    """Which facility-weeks get an alert.
+
+    Default: the top `ALERT_SHARE` of each facility's own weeks, ranked by `pred`. This needs the
+    whole test season at once, which deployment does not have -- pass `thresholds` from
+    `calibrate_thresholds` for the prospective rule instead.
+    """
     facility = test["EstablecimientoCodigo"]
-    rank = pd.Series(np.asarray(pred), index=test.index).groupby(facility).rank(
-        ascending=False, method="first")
+    pred = pd.Series(np.asarray(pred), index=test.index)
+
+    if thresholds is not None:
+        per_facility, national = thresholds
+        return pred >= facility.map(per_facility).fillna(national)
+
+    rank = pred.groupby(facility).rank(ascending=False, method="first")
     return rank <= facility.map(facility.value_counts()) * ALERT_SHARE
 
 
-def score_alerts(test, pred):
+def calibrate_thresholds(cal, score, share=ALERT_SHARE):
+    """The score cut that spent exactly `share` of the *calibration* season's weeks.
+
+    Returns `(per_facility, national)`; the national quantile covers facilities the calibration
+    season never saw. `cal` must be a season predicted out of sample -- an in-sample fit puts the
+    probabilities too high and the threshold with them.
+    """
+    s = pd.Series(np.asarray(score), index=cal.index)
+    return (s.groupby(cal["EstablecimientoCodigo"]).quantile(1 - share), s.quantile(1 - share))
+
+
+def score_alerts(test, pred, thresholds=None):
     """Recall/precision at a fixed alert budget: each facility alerts its own top 10% of weeks.
 
     `pred` ranks the facility's weeks; only the ordering matters, not the units. `test` supplies
     the boolean `surge` column. This is the metric the project is judged on -- an R2 gain that
     does not re-order this list is not a result.
+
+    With `thresholds` the budget is a cut fixed before the season, so the spend is whatever the
+    season turns out to deserve; `share` reports what it actually came to.
     """
-    alert, truth = alert_flags(test, pred), test["surge"]
+    alert, truth = alert_flags(test, pred, thresholds), test["surge"]
 
     tp = int((alert & truth).sum())
+    precision = tp / max(int(alert.sum()), 1)
+    base_rate = int(truth.sum()) / max(len(test), 1)
     return {
         "recall": tp / max(int(truth.sum()), 1),
-        "precision": tp / max(int(alert.sum()), 1),
+        "precision": precision,
         "alerts": int(alert.sum()),
         "surges": int(truth.sum()),
+        # A prospective cut does not spend exactly ALERT_SHARE -- the season spends what it
+        # deserves. So recall alone stops being comparable between rules, and `lift` (how many
+        # times better than alerting at random) is what survives a change of budget.
+        "share": int(alert.sum()) / max(len(test), 1),
+        "lift": precision / max(base_rate, 1e-9),
+        "silent": int((~alert.groupby(test["EstablecimientoCodigo"]).any()).sum()),
     }
 
 
@@ -398,16 +434,58 @@ def stage3_alerts(panel, test_year, h, clim_from=BASELINE_TRAIN_FROM, features=D
             "n_train": len(train), "n_test": len(test)}
 
 
+def prospective_alerts(panel, test_year, h, features=DEPLOYED_FEATURES):
+    """AC2 scored the way deployment must score it: the cut is fixed before the season starts.
+
+    The within-year rank in `alert_flags` compares week 30 against week 45, which has not happened
+    yet. Here the previous season is predicted out of sample by a model that never saw it, its
+    scores give the cut, and the test season is judged against that cut -- nothing from inside the
+    test season sets the budget, so the spend is free to be whatever the season deserves.
+
+    **The rank rule was only ever unfair to Stage 3.** A climatology score is a function of
+    week-of-year and training seasons alone, so it is fully known before the season opens and
+    ranking it within the year leaks nothing -- the baseline's 0.231 / 0.253 stand as deployable.
+    P(surge) moves with realised data, so ranking it within the year does not stand. All three
+    rules are reported for both models anyway, because a cut mechanism that flattered whoever it
+    was applied to would show up here as climatology gaining too.
+
+    The baseline is scored on `clim_z`, not the raw climatology level. Within a facility the two
+    rank identically, so `rank` and `per facility` are unchanged -- but a *national* cut on raw
+    counts would just alert the largest hospitals every week, which is not the climatology
+    baseline, it is a hospital-size baseline. A weakened baseline proves nothing.
+    """
+    cal = stage3_predict(panel, test_year - 1, h, features=features)[1]
+    test = stage3_predict(panel, test_year, h, features=features)[1]
+
+    out = {}
+    for name, col in (("climatology", "clim_z"), ("stage 3", "prob")):
+        out[name] = {
+            "rank": score_alerts(test, test[col]),
+            "per facility": score_alerts(test, test[col], calibrate_thresholds(cal, cal[col])),
+            # One cut for the whole country: lets the budget flow to the facilities that need it
+            # instead of forcing 10% of weeks onto every facility including the quiet ones.
+            "national": score_alerts(test, test[col],
+                                     (pd.Series(dtype=float), cal[col].quantile(1 - ALERT_SHARE))),
+        }
+    return out
+
+
 ALERT_LIST = ROOT / "data" / "processed" / "alert_list.parquet"
 
 
 def write_alert_list(panel, test_year, horizons=HORIZONS, path=ALERT_LIST):
     """AC7: the serving interface. One row per (facility, target week, horizon).
 
-    Nothing downstream should need to import this module -- it reads this file.
+    The `alert` flag uses the prospective national cut -- one P(surge) threshold for the country,
+    fixed on the previous season before this one starts. The within-year rank it replaced cannot
+    be computed in deployment at all: it needs week 45 to decide week 30. `cut` is written into
+    the file so a consumer can see what the flag means and re-threshold if it wants a different
+    operating point.
     """
     out = []
     for h in horizons:
+        cal = stage3_predict(panel, test_year - 1, h)[1]
+        cut = cal["prob"].quantile(1 - ALERT_SHARE)
         _, test = stage3_predict(panel, test_year, h)
         out.append(pd.DataFrame({
             "facility": test["EstablecimientoCodigo"].to_numpy(),
@@ -415,7 +493,8 @@ def write_alert_list(panel, test_year, horizons=HORIZONS, path=ALERT_LIST):
             "week": test["week"].to_numpy(),
             "horizon": h,
             "surge_probability": test["prob"].to_numpy(),
-            "alert": alert_flags(test, test["prob"]).to_numpy(),
+            "cut": cut,
+            "alert": (test["prob"] >= cut).to_numpy(),
             "observed_surge": test["surge"].to_numpy(),   # blank in live use; the target week
         }))                                               # has not happened yet
 
@@ -541,6 +620,25 @@ def demo():
             print(f"{test_year:<6}{label:<26}{len(cols):>3}{r['recall']:>9.3f}"
                   f"{r['precision']:>11.3f}")
 
+    print("\n\nProspective budget -- the alert cut fixed on the season BEFORE the test year")
+    print("(the within-year rank needs the whole season at once; deployment judges week 30 at 29)")
+    print("A prospective cut does not spend exactly 10%, so read `lift`, not `recall`, across")
+    print("rules; `silent` counts facilities that got no alert all season.")
+    print(f"\n{'test':<6}{'h':<3}{'model':<14}{'budget':<15}{'recall':>9}{'precision':>11}"
+          f"{'lift':>7}{'alert%':>9}{'silent':>8}")
+    prosp = {}
+    for test_year in AC2_BASELINE:
+        for h in HORIZONS:
+            r = prospective_alerts(panel, test_year, h)
+            for name in ("climatology", "stage 3"):
+                for rule in ("rank", "per facility", "national"):
+                    s = r[name][rule]
+                    print(f"{test_year:<6}{h:<3}{name:<14}{rule:<15}{s['recall']:>9.3f}"
+                          f"{s['precision']:>11.3f}{s['lift']:>7.2f}{s['share'] * 100:>8.1f}%"
+                          f"{s['silent']:>8}")
+            if h == 1:
+                prosp[test_year] = r
+
     print("\n\nAC7 -- the alert list as a file")
     alert_list, path = write_alert_list(panel, 2025)
     print(f"{len(alert_list):,} rows -> {path.relative_to(ROOT).as_posix()}")
@@ -559,6 +657,16 @@ def demo():
     print(f"{'OK' if passed else '--'}  AC2 {'MET' if passed else 'NOT met'} -- Stage 3 at h=1: "
           + ", ".join(f"{r['stage 3']['recall']:.3f} vs {r['climatology']['recall']:.3f} ({y})"
                       for y, r in ac2.items()))
+
+    # Lift, not recall: a prospective cut lets the spend drift, so recall is not comparable
+    # between rules. Both models are calibrated the same way on the same season.
+    held = all(r["stage 3"][rule]["lift"] > r["climatology"][rule]["lift"]
+               for r in prosp.values() for rule in ("per facility", "national"))
+    print(f"{'OK' if held else '--'}  AC2 {'survives' if held else 'does NOT survive'} a "
+          "prospective cut at h=1, on lift: "
+          + ", ".join(f"{r['stage 3']['per facility']['lift']:.2f} vs "
+                      f"{r['climatology']['per facility']['lift']:.2f} ({y})"
+                      for y, r in prosp.items()))
 
 
 if __name__ == "__main__":
