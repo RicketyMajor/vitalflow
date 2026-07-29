@@ -35,6 +35,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import RidgeCV
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -470,6 +471,41 @@ def prospective_alerts(panel, test_year, h, features=DEPLOYED_FEATURES):
     return out
 
 
+def fit_calibrator(cal):
+    """Isotonic score -> observed frequency, fitted on the calibration season.
+
+    **Measured 2026-07-29 and NOT shipped: it makes calibration worse.** Mean |gap| over score
+    deciles went 0.030 -> 0.035 (2025) and 0.058 -> 0.210 (2024). Kept because `demo()` prints
+    the failure, and because the reason is a property of the problem rather than of this code:
+
+    * The surge base rate moves 7.7% (2025) to 13.3% (2024) between seasons, and *which kind of
+      season it is* is the thing being forecast. A mapping learned on last season's frequencies
+      is applied to a season with a different one, so it is biased by the very quantity that is
+      unknown at calibration time. A prospectively calibrated absolute probability is close to
+      unobtainable here.
+    * The 2024 calibrator is fitted on 2023, whose model saw only 2022. One season of training
+      behind one season of calibration.
+    * Isotonic is monotone but not *strictly* so: flat regions collapse distinct scores into ties,
+      which moved the alert set by 89 rows (2025) and 677 (2024). The claim that a monotone map
+      cannot change the alert set is wrong in practice.
+
+    The served column is therefore `score`, not `surge_probability`. What this model produces is a
+    validated ranking; the absolute level depends on a season severity nobody knows in advance.
+    """
+    return IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0).fit(
+        cal["prob"].to_numpy(), cal["surge"].to_numpy())
+
+
+def reliability(prob, truth, bins=10):
+    """Predicted vs observed frequency by score decile -- the calibration check itself."""
+    q = pd.qcut(pd.Series(np.asarray(prob)), bins, duplicates="drop", labels=False)
+    t = pd.DataFrame({"p": np.asarray(prob), "y": np.asarray(truth), "bin": q})
+    g = t.groupby("bin", observed=True).agg(predicted=("p", "mean"), observed=("y", "mean"),
+                                            n=("y", "size"))
+    g["gap"] = g["predicted"] - g["observed"]
+    return g
+
+
 ALERT_LIST = ROOT / "data" / "processed" / "alert_list.parquet"
 
 
@@ -481,6 +517,10 @@ def write_alert_list(panel, test_year, horizons=HORIZONS, path=ALERT_LIST):
     be computed in deployment at all: it needs week 45 to decide week 30. `cut` is written into
     the file so a consumer can see what the flag means and re-threshold if it wants a different
     operating point.
+
+    The column is `score`, not `surge_probability`. It ranks; it is not a calibrated frequency,
+    and calibrating it was tried and measured worse -- see `fit_calibrator`. Naming it after what
+    it is stops a consumer reading 0.53 as "53% chance".
     """
     out = []
     for h in horizons:
@@ -492,14 +532,14 @@ def write_alert_list(panel, test_year, horizons=HORIZONS, path=ALERT_LIST):
             "year": test_year,
             "week": test["week"].to_numpy(),
             "horizon": h,
-            "surge_probability": test["prob"].to_numpy(),
+            "score": test["prob"].to_numpy(),
             "cut": cut,
             "alert": (test["prob"] >= cut).to_numpy(),
             "observed_surge": test["surge"].to_numpy(),   # blank in live use; the target week
         }))                                               # has not happened yet
 
     df = pd.concat(out, ignore_index=True).sort_values(
-        ["horizon", "week", "surge_probability"], ascending=[True, True, False])
+        ["horizon", "week", "score"], ascending=[True, True, False])
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(path, index=False)
     return df, path
@@ -638,6 +678,26 @@ def demo():
                           f"{s['silent']:>8}")
             if h == 1:
                 prosp[test_year] = r
+
+    print("\n\nCalibration -- WHY THE SERVED COLUMN IS `score` AND NOT `surge_probability`")
+    print("Isotonic fitted on the prior season, measured here and rejected: it makes the gap")
+    print("worse, because the surge base rate moves 7.7% -> 13.3% between seasons and that is")
+    print("the very thing being forecast. It also creates ties that move the alert set.")
+    for test_year in AC2_BASELINE:
+        cal = stage3_predict(panel, test_year - 1, 1)[1]
+        _, test = stage3_predict(panel, test_year, 1)
+        iso = fit_calibrator(cal)
+        raw = test["prob"].to_numpy()
+        cooked = iso.predict(raw)
+        before, after = reliability(raw, test["surge"]), reliability(cooked, test["surge"])
+        raw_cut = cal["prob"].quantile(1 - ALERT_SHARE)
+        moved = int(((raw >= raw_cut) != (cooked >= float(iso.predict([raw_cut])[0]))).sum())
+        print(f"\n  {test_year}   mean |gap| {before['gap'].abs().mean():.3f} -> "
+              f"{after['gap'].abs().mean():.3f}    top decile pred/obs "
+              f"{before['predicted'].iloc[-1]:.3f}/{before['observed'].iloc[-1]:.3f} -> "
+              f"{after['predicted'].iloc[-1]:.3f}/{after['observed'].iloc[-1]:.3f}"
+              f"    alert set moves {moved} of {len(test):,} rows")
+        print(after.round(3).to_string())
 
     print("\n\nAC7 -- the alert list as a file")
     alert_list, path = write_alert_list(panel, 2025)

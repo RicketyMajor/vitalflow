@@ -59,11 +59,15 @@ def _to_float(series):
     )
 
 
-def load_weekly_target(year_min=None, year_max=None, con=None):
+def load_weekly_target(year_min=None, year_max=None, con=None, drop_unsettled=True):
     """One row per (facility, year, epidemiological week) with static metadata attached.
 
     Returns the target `Total_Respiratorias` plus the age breakdown. Note the age columns
     sum to the total exactly, so never feed both to a model — see decisions/log.md.
+
+    `drop_unsettled` trims trailing weeks that are still filling in — DEIS publishes a week the
+    day it closes with ~19% of its eventual attentions. Set it False only to study the tail
+    itself; every modelling caller wants the default.
     """
     where = [f"OrdenCausa = {TARGET_ORDEN_CAUSA}", "SemanaEstadistica <> 53"]
     if year_min is not None:
@@ -103,7 +107,48 @@ def load_weekly_target(year_min=None, year_max=None, con=None):
         ["restriction", "rebound"],
         default="normal",
     )
-    return df
+    return drop_unsettled_tail(df) if drop_unsettled else df
+
+
+# Measured 2026-07-29 from two DEIS snapshots eleven days apart. A week is published the day it
+# closes and fills in afterwards:
+#     age  0 days -> 19.1% of its final value      age 14 days -> 99.5%
+#     age  7 days -> 97.8%                         age 21 days -> 99.4%
+# The failure is silent and one-directional: an incomplete week reads as a demand collapse, so a
+# surge model fed one predicts calm at exactly the wrong time. See decisions/log.md, 2026-07-29.
+MIN_TAIL_COMPLETENESS = 0.90
+
+
+def drop_unsettled_tail(df, min_completeness=MIN_TAIL_COMPLETENESS):
+    """Remove trailing weeks that have not finished reporting.
+
+    A week counts as settled when the facilities reporting it reach `min_completeness` of the
+    median over the preceding 8 settled weeks. Only the *tail* is trimmed -- an old week with a
+    genuine coverage gap is data, not an artifact.
+    """
+    counts = (df.groupby(["Anio", "SemanaEstadistica"])["EstablecimientoCodigo"]
+              .nunique().sort_index())
+    if len(counts) < 9:
+        return df
+
+    reference = counts.shift(1).rolling(8).median()
+    settled = counts >= reference * min_completeness
+    cut = None
+    for key in reversed(counts.index):                 # walk back from the newest week only
+        if pd.notna(reference.get(key)) and not settled.get(key, True):
+            cut = key
+        else:
+            break
+
+    if cut is None:
+        return df
+    dropped = [k for k in counts.index if k >= cut]
+    print(f"load_weekly_target: dropping {len(dropped)} unsettled tail week(s) "
+          f"{dropped} -- reporting facilities below {min_completeness:.0%} of recent median. "
+          f"Pass drop_unsettled=False to keep them.")
+    keep = ~pd.MultiIndex.from_frame(
+        df[["Anio", "SemanaEstadistica"]]).isin(dropped)
+    return df[keep].copy()
 
 
 def load_weekly_pollution(con=None):
@@ -231,6 +276,17 @@ def demo():
     sta = pd.DataFrame({"estacion": ["V"], "latitud": [-33.05], "longitud": [-71.62]})
     d = nearest_station(fac, sta)["station_distance_km"].iloc[0]
     assert 90 < d < 110, f"great-circle distance looks wrong: {d:.1f} km"
+
+    # A week still filling in must be trimmed from the tail; an old coverage gap must not be.
+    full = pd.DataFrame([(2026, w, f) for w in range(1, 13) for f in range(100)],
+                        columns=["Anio", "SemanaEstadistica", "EstablecimientoCodigo"])
+    tail = pd.concat([full, pd.DataFrame([(2026, 13, f) for f in range(15)],
+                                         columns=full.columns)], ignore_index=True)
+    assert drop_unsettled_tail(tail)["SemanaEstadistica"].max() == 12, "unsettled tail not trimmed"
+    assert len(drop_unsettled_tail(full)) == len(full), "a settled series must pass through"
+    gap = full[(full["SemanaEstadistica"] != 6) | (full["EstablecimientoCodigo"] < 10)]
+    assert drop_unsettled_tail(gap)["SemanaEstadistica"].max() == 12, \
+        "an old gap is data, only the tail is an artifact"
 
     df = load_weekly_target(2023, 2025)
     assert (df["SemanaEstadistica"] != 53).all(), "week 53 leaked through"

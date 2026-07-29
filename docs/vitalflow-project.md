@@ -24,6 +24,14 @@ A hospital that knows next week will be heavy can call in relief staff, reschedu
 contingency beds and defer non-urgent procedures. Those are the levers that operate on a horizon of
 days to a fortnight, and they are the levers this system serves.
 
+> ⚠ **Weakened 2026-07-29 by clinical input** (Hospital Claudio Vicuña, single source). Allocation
+> inside a Chilean ER is governed by **ESI five-level triage in real time**, not by advance
+> planning. The alert is therefore closer to triage support than to an anticipatory scheduling
+> signal, and the anticipatory levers listed above are a weaker justification than this section
+> assumes — they may also belong to hospital management rather than to the ER floor. This settled
+> the budget-rule question in favour of the national cut (§9.3) and it needs a second facility
+> before anything rests on it.
+
 Longer-lead decisions — hiring, budget reallocation, structural capacity — would need one to two
 months of warning. **That warning is not obtainable from the available data, and Section 5b explains
 in measured terms why.** Claiming otherwise would produce an alert list no better than a wall
@@ -283,11 +291,33 @@ this document previously claimed it was.
 
 ### 9.3. Known limits
 
-- **~30% of facilities get no alert at all in a quiet season.** 185 of 609 in 2025, 66 in 2024,
-  under the national cut. Recall went *up* when the cut replaced the rank, so silence is not costing
-  surges — a facility whose season never approaches its own p90 has nothing to warn about. But
-  whether "no alerts this year" reads to a clinician as reassurance or as neglect has not been
-  asked. The per-facility cut is the fallback, at a cost of about 0.7 lift in 2025 and 1.15 in 2024.
+- **The serving origin is W−1 and the horizon is h=2.** DEIS publishes with zero lag, but a week is
+  only **19.1% complete the day it closes** — 97.8% after seven days, 99.5% after fourteen
+  (measured 2026-07-29 from two snapshots eleven days apart; week 28 went 17,311 → 90,574, +423%).
+  Backtests read final values; deployment would read a fifth of one, and `z` — the model's dominant
+  feature — would register a historic collapse. **Every h=1 figure in this document is a correct
+  measurement of a horizon deployment does not have.** The operational numbers are the h=2 ones.
+  `load_weekly_target` now trims the unsettled tail for every caller.
+- **The alert budget is spent at the peak, not on the ascent, and fixing it is a real trade.** In
+  2024 the national cut places 61.3% of its alerts in the five peak weeks (recall 0.727) and 6.5%
+  across the fourteen ascent weeks (recall 0.148). Ranking facilities *within* each week raises
+  ascent recall to 0.343 and costs 45% of overall lift (5.43 → 2.98), because 42% of the season's
+  surges sit in 10% of its calendar and a uniform weekly budget cannot follow that. The union of
+  both rules covers ascent *and* peak (0.343 / 0.727, recall 0.547) at 1.7× the budget. **No rule
+  dominates**; the choice depends on whether an alert is for anticipation or for triage, which is a
+  clinical question the project has not asked.
+- **~30% of facilities get no alert at all in a quiet season**, 185 of 609 in 2025 and 66 in 2024.
+  Measured cost: **only 3.2% (2025) and 1.1% (2024) of all surges** land in a facility that is never
+  warned, and there is no volume bias (median 141 vs 140 weekly attentions). Smaller concern than it
+  first appeared; it is a communication question, not a coverage failure.
+- **The model produces a ranking, not a probability, and that is structural.** The raw score is
+  badly calibrated (top decile 0.569 predicted vs 0.398 observed in 2025; 0.837 vs 0.680 in 2024).
+  Isotonic regression on the calibration season was implemented and **made it worse** — mean decile
+  gap 0.030 → 0.035 (2025) and 0.058 → 0.210 (2024) — because the surge base rate moves 7.7% to
+  13.3% between seasons and *which season it is* is the thing being forecast. A prospectively
+  calibrated absolute probability is close to unobtainable here. The served column is therefore
+  named `score`, and the interface can honestly show a rank or a within-season percentile, never
+  a percentage chance.
 - **The cut is calibrated on one prior season.** For test 2024 that season is 2023, itself trained
   on 2022 alone. Thin — and the 2024 spend drifting to 11.4% is what that thinness looks like.
 - **The ablation is two holdout years and one seed.** A 0.005 delta is within noise, and there is now
@@ -406,14 +436,31 @@ for the numbers. What is left:
 1. ~~**Turn the alert budget into a score threshold.**~~ **Done 2026-07-28** — a national P(surge)
    cut fixed on the previous season. The protocol turned out to be pessimistic, not optimistic:
    lift roughly doubles against the calendar. See §9.1 and the decision log entry.
-2. **Automate the weekly refresh** from the DEIS release to `data/processed/alert_list.parquet`.
-   One classifier on six features, so there is no second pipeline to schedule — and now that the
-   flag is a threshold rather than a within-year rank, there is nothing that needs the season to
-   be over.
-3. **Build the interface** on top of that file: per facility, the next two weeks' alert status and
-   the seasonal context that justifies it. The national wave forecast belongs here as *context* —
-   it is honest to show and it is not what drives the alerts. Decide what a silent facility sees.
-4. **Re-check the ablation** when a third holdout year exists. The conclusion that the national
+**Re-ordered 2026-07-28 after an end-to-end audit.** The classifier is not the bottleneck. Two of
+the three things now blocking a usable product are in the serving layer and one is in the target
+definition.
+
+2. ~~**Replace the budget rule with a within-week ranking.**~~ **Measured 2026-07-29 — no rule
+   dominates.** Within-week ranking triples ascent recall and costs 45% of lift; the union of it
+   and the national cut covers both phases at 1.7× the budget. The national cut stays shipped. The
+   open item is now a **clinical question**: is an alert for anticipation or for triage? That
+   decides the rule, and no measurement can.
+3. ~~**Measure the settling curve.**~~ **Done 2026-07-29.** 19.1% complete at age zero, 97.8% at
+   seven days, 99.5% at fourteen. Serving origin W−1, operational horizon h=2, and
+   `load_weekly_target` now trims the unsettled tail for every caller.
+4. **Calibrate the probability** — isotonic regression on the calibration season already being
+   computed. Until then the served column is a score wearing a probability's name.
+5. **Run 2026 as a sealed holdout.** 28 weeks, 632 facilities, never used for any decision — the
+   feature set, the climatology window and the budget rule were all chosen on 2024 and 2025, which
+   are also the years AC2 reports. Write the expected numbers down before running, run once, and do
+   not tune on it afterwards.
+6. **Test the target against REM20.** Does a week above the facility's own p90 coincide with any
+   measurable strain — occupancy, length of stay, diversion? The document is titled *saturation*
+   and the target is a demand percentile; these are different constructs and the gap has never been
+   measured. A null result is worth having, and it is far cheaper now than after deployment.
+7. **Automate the weekly refresh and build the interface**, once 2–4 have settled what is served.
+   The refresh must assert tail completeness — refuse to serve on a short week.
+8. **Re-check the ablation** when a third holdout year exists. The conclusion that the national
    wave is negligible rests on two years and deltas of 0.005 — the same size as the run-to-run
    noise documented in §9.3.
 5. **Only then** revisit covariates, against the filter in §8.2: not seasonal, not static, not
