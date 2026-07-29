@@ -159,6 +159,67 @@ def backtest(panel, h, leak_free=True):
 SURGE_QUANTILE = 0.90   # a surge is a week above the facility's own historical p90
 ALERT_SHARE = 0.10      # every model spends the same budget, or recall is won by shouting
 
+# Product scope, 2026-07-29. The alert goes to a hospital ER's shift coordinator, who can activate
+# the bed contingency plan, reassign internal functions, or authorise reinforcement shifts. An
+# ambulatory SAPU/SAR runs one or two physicians per shift with no spare boxes and therefore has no
+# lever -- an alert there is noise. So a metric averaged over all 623 facilities is not measuring the
+# product: 446 of them cannot act on it. See context/decisions/log.md, 2026-07-29.
+HOSPITAL_ER = "UEH"
+
+# The winter reinforcement budget is released on a MINSAL decree, typically late May / June, so a
+# wider alert set is only *actionable* inside the campaign; outside it the hospital is on the fixed
+# dotación approved the month before and extra shifts cannot be bought. Hence two budget regimes.
+# The weeks come from the calendar and are NEVER fitted -- tuning the boundary on outcomes would be
+# exactly the leak AC4 exists to prevent.
+CAMPAIGN_WEEKS = range(22, 36)
+CAMPAIGN_SHARE = 0.20
+
+
+def hospital_er_facilities(panel):
+    """Facility codes whose emergency department belongs to a hospital -- the product's scope.
+
+    Matched case-insensitively on `TipoUrgencia`, which is the authoritative column: three
+    facilities are `TipoEstablecimiento == "Hospital"` without being UEH, and `normalize_category`
+    preserves case deliberately, so both "Urgencia ambulatoria (SAR)" and "Urgencia Ambulatoria
+    (SAR)" occur in the raw data.
+    """
+    t = panel.groupby("EstablecimientoCodigo")["TipoUrgencia"].first().astype(str)
+    return t.index[t.str.contains(HOSPITAL_ER, case=False, na=False)]
+
+
+def high_complexity_facilities(panel):
+    """The subset of hospital ERs with resuscitation capacity -- 55 units, 12.3% of volume."""
+    c = panel.groupby("EstablecimientoCodigo")["NivelComplejidad"].first().astype(str)
+    return c.index.intersection(hospital_er_facilities(panel)).intersection(
+        c.index[c.str.contains("alta", case=False, na=False)])
+
+
+def scope_panel(panel, facilities=None):
+    """Restrict the panel to `facilities`, or return it whole.
+
+    Filtering the panel and filtering the scored rows are equivalent **for what ships**: every one
+    of the six `DEPLOYED_FEATURES` is derived from that facility's own history, so no deployed
+    feature changes when other facilities leave. It does change Stage 1 and `beta`, which is why
+    the Stage 1/2 tables and the ablation stay on the full panel.
+    """
+    if facilities is None:
+        return panel
+    return panel[panel["EstablecimientoCodigo"].isin(facilities)].copy()
+
+
+def two_regime_cuts(cal, score, base=ALERT_SHARE, campaign=CAMPAIGN_SHARE):
+    """One score cut per budget regime, both fixed on the calibration season (AC4).
+
+    Returns `{True: campaign_cut, False: base_cut}`, keyed by whether the target week falls inside
+    `CAMPAIGN_WEEKS`. Each regime's cut is the quantile of *that regime's own* calibration weeks:
+    a single national quantile would let the busy campaign weeks set the threshold for the quiet
+    ones, which is the confound this rule exists to remove.
+    """
+    s = pd.Series(np.asarray(score), index=cal.index)
+    inside = cal["week"].isin(CAMPAIGN_WEEKS)
+    return {True: s[inside].quantile(1 - campaign),
+            False: s[~inside].quantile(1 - base)}
+
 # Stage 3 must beat this. Measured below, post-COVID window (see BASELINE_TRAIN_FROM), by the same
 # `score_alerts` that will score Stage 3 -- a benchmark computed by other code is not a benchmark.
 BASELINE_TRAIN_FROM = 2022
@@ -175,6 +236,10 @@ def alert_flags(test, pred, thresholds=None):
     """
     facility = test["EstablecimientoCodigo"]
     pred = pd.Series(np.asarray(pred), index=test.index)
+
+    if isinstance(thresholds, dict):
+        # Two-regime: the cut depends on the target week's calendar position, not on the facility.
+        return pred >= test["week"].isin(CAMPAIGN_WEEKS).map(thresholds)
 
     if thresholds is not None:
         per_facility, national = thresholds
@@ -467,6 +532,8 @@ def prospective_alerts(panel, test_year, h, features=DEPLOYED_FEATURES):
             # instead of forcing 10% of weeks onto every facility including the quiet ones.
             "national": score_alerts(test, test[col],
                                      (pd.Series(dtype=float), cal[col].quantile(1 - ALERT_SHARE))),
+            # Two cuts, one per budget regime. Not shipped until measured -- rule 8.
+            "two regime": score_alerts(test, test[col], two_regime_cuts(cal, cal[col])),
         }
     return out
 
@@ -509,7 +576,7 @@ def reliability(prob, truth, bins=10):
 ALERT_LIST = ROOT / "data" / "processed" / "alert_list.parquet"
 
 
-def write_alert_list(panel, test_year, horizons=HORIZONS, path=ALERT_LIST):
+def write_alert_list(panel, test_year, horizons=HORIZONS, path=ALERT_LIST, hospital_only=True):
     """AC7: the serving interface. One row per (facility, target week, horizon).
 
     The `alert` flag uses the prospective national cut -- one P(surge) threshold for the country,
@@ -521,7 +588,15 @@ def write_alert_list(panel, test_year, horizons=HORIZONS, path=ALERT_LIST):
     The column is `score`, not `surge_probability`. It ranks; it is not a calibrated frequency,
     and calibrating it was tried and measured worse -- see `fit_calibrator`. Naming it after what
     it is stops a consumer reading 0.53 as "53% chance".
+
+    **Hospital ERs only since 2026-07-29.** An ambulatory SAPU/SAR cannot act on an alert -- fixed
+    staffing, no spare boxes -- so shipping it one is noise, and scoring the list over facilities
+    that cannot act was measuring the wrong population. Measured, the restriction *improves* the
+    product: recall 0.335 -> 0.464 and lift 6.63 -> 7.09 in 2025 at h=1, with silent facilities
+    falling from 185 to 49. Pass `hospital_only=False` to reproduce the old national list.
     """
+    panel = scope_panel(panel, hospital_er_facilities(panel) if hospital_only else None)
+
     out = []
     for h in horizons:
         cal = stage3_predict(panel, test_year - 1, h)[1]
@@ -679,6 +754,47 @@ def demo():
             if h == 1:
                 prosp[test_year] = r
 
+    print("\n\nProduct scope -- the same model scored on the population that can act on the alert")
+    print("An ambulatory SAPU/SAR has 1-2 physicians per shift and no spare boxes: an alert there")
+    print("has no lever. Averaging a metric over 446 such facilities was measuring the wrong")
+    print("population. Prospective national cut, both models on identical rows.")
+    scopes = {"full panel": None,
+              "hospital ER (UEH)": hospital_er_facilities(panel),
+              "high complexity": high_complexity_facilities(panel)}
+    print(f"\n{'scope':<19}{'fac':>5}{'test':>6}{'h':>3}{'model':<13}{'recall':>9}{'prec':>8}"
+          f"{'lift':>7}{'alert%':>8}{'silent':>8}")
+    scoped = {}
+    for label, fac in scopes.items():
+        p = scope_panel(panel, fac)
+        for test_year in AC2_BASELINE:
+            for h in HORIZONS:
+                r = prospective_alerts(p, test_year, h)
+                for name in ("climatology", "stage 3"):
+                    s = r[name]["national"]
+                    print(f"{label:<19}{p['EstablecimientoCodigo'].nunique():>5}{test_year:>6}"
+                          f"{h:>3} {name:<12}{s['recall']:>9.3f}{s['precision']:>8.3f}"
+                          f"{s['lift']:>7.2f}{s['share'] * 100:>7.1f}%{s['silent']:>8}")
+                if h == 1:
+                    scoped[(label, test_year)] = r
+
+    print("\n\nTwo-regime budget cut -- MEASURED AND NOT SHIPPED")
+    print(f"The winter reinforcement budget only exists inside the declared campaign, so a wider")
+    print(f"alert set is only actionable in weeks {CAMPAIGN_WEEKS.start}-{CAMPAIGN_WEEKS.stop - 1}."
+          " Spending more there was the obvious")
+    print("implementation. It fails: the campaign window is 14 weeks wide and holds only 23-28% of")
+    print("surges -- barely more than its 27% share of rows -- so the extra budget lands on the")
+    print("campaign's own quiet weeks. Worst in 2024, the wave year, which is the year that matters.")
+    ueh = scope_panel(panel, hospital_er_facilities(panel))
+    print(f"\n{'test':<6}{'h':<3}{'rule':<20}{'recall':>9}{'prec':>8}{'lift':>7}{'alert%':>8}")
+    for test_year in AC2_BASELINE:
+        for h in HORIZONS:
+            r = prospective_alerts(ueh, test_year, h)["stage 3"]
+            for rule in ("national", "two regime"):
+                s = r[rule]
+                tag = "national (SHIPPED)" if rule == "national" else "two regime @0.20"
+                print(f"{test_year:<6}{h:<3}{tag:<20}{s['recall']:>9.3f}{s['precision']:>8.3f}"
+                      f"{s['lift']:>7.2f}{s['share'] * 100:>7.1f}%")
+
     print("\n\nCalibration -- WHY THE SERVED COLUMN IS `score` AND NOT `surge_probability`")
     print("Isotonic fitted on the prior season, measured here and rejected: it makes the gap")
     print("worse, because the surge base rate moves 7.7% -> 13.3% between seasons and that is")
@@ -727,6 +843,20 @@ def demo():
           + ", ".join(f"{r['stage 3']['per facility']['lift']:.2f} vs "
                       f"{r['climatology']['per facility']['lift']:.2f} ({y})"
                       for y, r in prosp.items()))
+
+    # AC2 on the product's own population, which is the version that counts since 2026-07-29.
+    # Asserted separately from the full-panel guard above: that one is a regression check on a
+    # baseline computed over 623 facilities, this one is the acceptance criterion.
+    on_scope = [(label, y, r) for (label, y), r in scoped.items() if label != "full panel"]
+    scope_ok = all(r["stage 3"]["national"]["recall"] > r["climatology"]["national"]["recall"]
+                   and r["stage 3"]["national"]["precision"]
+                   >= r["climatology"]["national"]["precision"]
+                   for _, _, r in on_scope)
+    print(f"{'OK' if scope_ok else '--'}  AC2 {'MET' if scope_ok else 'NOT met'} on the hospital "
+          "scope at h=1, national cut: "
+          + ", ".join(f"{r['stage 3']['national']['lift']:.2f} vs "
+                      f"{r['climatology']['national']['lift']:.2f} ({label[:3]} {y})"
+                      for label, y, r in on_scope))
 
 
 if __name__ == "__main__":

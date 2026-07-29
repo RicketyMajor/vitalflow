@@ -1,4 +1,13 @@
-# VitalFlow: Early Warning System for Respiratory Emergency-Room Saturation
+# VitalFlow: Early Warning System for Respiratory Demand Surges in Chilean Hospital Emergency Rooms
+
+> **Renamed 2026-07-29, and the rename is a finding.** This document was titled *"…for Respiratory
+> Emergency-Room Saturation"* for its whole life. Saturation is demand measured against capacity, and
+> no capacity variable ever entered the model — none exists in the open data for the ambulatory
+> facilities carrying 73.7% of respiratory volume. What is forecast is **anomalously high demand
+> relative to each facility's own history**: weeks above its own 90th percentile. The target was then
+> tested three ways for operational contamination and survived all three (`context/decisions/log.md`,
+> 2026-07-29), so "demand" is not a hedge — it is the measured claim. "Hospital" is in the title
+> because that is the only population the alert can reach.
 
 > **Document status.** Rewritten 2026-07-27. The previous version described a 4-to-8-week forecasting
 > system built on a Temporal Fusion Transformer over spatially clustered facilities, with air quality
@@ -31,6 +40,22 @@ days to a fortnight, and they are the levers this system serves.
 > assumes — they may also belong to hospital management rather than to the ER floor. This settled
 > the budget-rule question in favour of the national cut (§9.3) and it needs a second facility
 > before anything rests on it.
+>
+> **Resolved 2026-07-29 by a second physician answer, and it strikes half of this section.** The
+> rostering question above was asked and answered with a calendar: the *rol de turnos* closes between
+> the **20th and the 25th of the preceding month**, signed and contractually committed under the
+> Estatuto Administrativo (Ley 18.834) and the Leyes Médicas (Ley 19.664 / 15.076). Moving *base*
+> staffing for a target week therefore needs **4 to 7 weeks** of notice, against a measured horizon
+> wall of **3** (§5b). **The calendars are disjoint: "call in relief staff" and "reschedule shifts"
+> are struck as levers, permanently and for a structural reason no model repairs.**
+>
+> **What this section may claim instead**, all of it confirmed available at 48–72 h and therefore
+> comfortably inside h=2: activating the **bed contingency plan** (moving boarded patients to
+> peripheral wards to free gurneys), **reassigning internal functions** (pulling the physician on
+> *policlínico de choque* to reinforce the C3 box), and **authorising mirror shifts** against the
+> contingency budget at +25/50% overtime. The recipient is the **Enfermero Coordinador de Turno /
+> Jefe de Servicio de Urgencia** — not the physician on the floor, and not a SAPU, where an alert has
+> zero operational consequence. See `context/decisions/log.md`, the two 2026-07-29 entries.
 
 Longer-lead decisions — hiring, budget reallocation, structural capacity — would need one to two
 months of warning. **That warning is not obtainable from the available data, and Section 5b explains

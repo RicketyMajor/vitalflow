@@ -1,13 +1,27 @@
-# VitalFlow: Early Warning System for Respiratory ER Saturation
+# VitalFlow: Early Warning System for Respiratory Demand Surges in Chilean Hospital Emergency Rooms
 
-VitalFlow forecasts weekly respiratory emergency-room demand for each health facility in Chile at a
-**1-to-2-week horizon**, and delivers it as a ranked alert list: for every facility, the weeks most
-likely to exceed its own historical 90th percentile of demand. The lever it serves is operational —
-shift rescheduling, relief staff, contingency beds.
+VitalFlow forecasts weekly respiratory emergency-room demand for each hospital emergency department in
+Chile at a **1-to-2-week horizon**, and delivers it as a ranked alert list: the weeks each facility is
+most likely to exceed **its own historical 90th percentile** of demand.
 
-The horizon is short on purpose. It is the horizon the data supports, and Section §5b of
+**It forecasts demand, not saturation.** The distinction is deliberate and was earned: saturation is
+demand against capacity, and no capacity measure exists in the open data for most Chilean emergency
+facilities. What is measured here is the numerator. The target survived three separate tests for
+operational contamination — boarded patients generate no second attention, walkouts *are* counted as
+NSP/Fuga, and the cause sections reconcile to the total with zero residual — so it is a clean measure
+of demand pressure. See `context/decisions/log.md`, 2026-07-29.
+
+**Who it is for.** The alert goes to the shift coordinator or *Jefe de Servicio de Urgencia* of a
+hospital emergency department, and serves three levers that all operate at 48–72 hours: activating the
+bed contingency plan, reassigning internal functions, and authorising reinforcement shifts against the
+winter-campaign budget. Ambulatory units (SAPU/SAR/SUR) are **not** alert destinations — their
+staffing is fixed and an alert there has no lever to pull — but they remain in the panel as training
+data.
+
+The horizon is short on purpose: it is the horizon the data supports, and §5b of
 [`docs/vitalflow-project.md`](docs/vitalflow-project.md) documents in measured terms how that was
-established.
+established. Base shift rostering is *not* among the levers served — the monthly roster closes on the
+20th–25th of the preceding month, which needs 4–7 weeks of notice against a measured 3-week skill wall.
 
 ## Core Objectives
 
@@ -16,6 +30,8 @@ established.
 2. Convert it into a per-facility alert list that beats climatology on **surge recall and precision
    at a fixed alert budget** — the metric an administrator actually consumes, rather than R².
 3. Automate the weekly refresh from the DEIS open-data release and put a readable interface on top.
+
+Scored on hospital emergency departments, which is the population the alert can reach.
 
 ## What the data says
 
