@@ -27,11 +27,63 @@ established. Base shift rostering is *not* among the levers served — the month
 
 1. Forecast the national respiratory wave at 1–2 weeks, beating the seasonal climatology out of
    sample, scored **within** each test season.
-2. Convert it into a per-facility alert list that beats climatology on **surge recall and precision
-   at a fixed alert budget** — the metric an administrator actually consumes, rather than R².
+2. Convert it into a per-facility alert list that beats both the seasonal calendar and naive persistence
+   on **new-surge (onset) recall at a fixed alert budget** — the metric an administrator actually
+   consumes, rather than R², and the half of the target that needs forecasting.
 3. Automate the weekly refresh from the DEIS open-data release and put a readable interface on top.
 
 Scored on hospital emergency departments, which is the population the alert can reach.
+
+## What it delivers
+
+Validated on **2026 as a sealed holdout** — 28 settled weeks over 180 hospital emergency departments,
+a season that was never consulted for any modelling decision. The protocol, the expected numbers and
+the falsification thresholds were written down before the data was touched
+(`context/specs/2026-sealed-holdout.md`), the test was run once, and the model was not adjusted
+afterwards.
+
+**The result that matters is onset recall** — how many *new* surges are caught, at a fixed alert budget.
+Roughly half of all surge weeks are continuations of a surge already underway, and a coordinator can see
+those from the waiting room; catching them needs no model. Measured at matched spend on the sealed
+season, against the seasonal calendar and against a one-line persistence rule:
+
+| horizon | climatology | **this model** | persistence |
+| :--- | ---: | ---: | ---: |
+| h=2 *(the operational horizon)* | 0.123 | **0.154** | 0.092 |
+| h=1 | 0.137 | **0.206** | 0.053 |
+
+At a fixed budget the model finds roughly **twice as many new surges as the calendar** and **about four
+times as many as persistence**. Persistence scores 0.000 at h=1 by construction — it cannot flag a surge
+that has not started. Across the model's three holdout seasons and both horizons it wins **5 of 6**
+season×horizon cells against the calendar and **6 of 6** against persistence; `src/models/train_model.py`
+asserts the h=1 result on every run.
+
+On the **aggregate** metric — all surge weeks, onsets and continuations together — the figures are recall
+0.478 / precision 0.437 at h=1 and 0.267 / 0.283 at h=2, against a climatology of 0.109 and 0.105: a
+margin of **4.01×** and **2.69×**, the best of the model's three holdout seasons (2024: 2.21× / 2.04×;
+2025: 3.32× / 2.20×). **But the aggregate overstates early-warning skill**, and the one-line persistence
+rule beats the model on it. That is a fact about the metric, not about the model, and it is why onset
+recall is reported first. Full treatment in `docs/vitalflow-project.md` §9.1b.
+
+*Reproducibility caveat, stated plainly: run with `OMP_NUM_THREADS=1`, but that is not sufficient —
+separate processes still disagree, and h=1 aggregate lift has been observed between 7.94 and 8.10 across
+five runs. Conclusions are stable across that spread; individual digits are not, and should not be quoted
+to three decimals until it is fixed. See §9.3.*
+
+> **How to read these numbers.** *Lift* — precision divided by the surge base rate — is the natural
+> figure here, but it **is not comparable between seasons**: its denominator is the season's severity,
+> which is the quantity the model exists to forecast. 2026's h=1 lift of 7.95 is higher than 2025's
+> 7.06 while its *precision* is lower, purely because 2026 was a quieter season (base rate 0.055
+> against 0.070). The **margin** above — lift over the climatology's lift on identical rows, which
+> reduces to a ratio of precisions — is the figure that survives a change of season, and it is the one
+> reported. This was learned by falsifying a pre-registered prediction; see
+> `context/decisions/log.md`, 2026-07-29. (2026 h=1 precision 0.437 against 2025's 0.498, base rate
+> 0.055 against 0.070.)
+
+**What this does not establish.** The holdout validates the *pipeline* — the ranking transfers to an
+unseen season. It says nothing about whether a week above a facility's own p90 coincides with
+measurable *strain*, which needs a capacity denominator the open data does not contain for most
+facilities. That question is open.
 
 ## What the data says
 
@@ -44,7 +96,7 @@ eliminated most of the original plan:
 | Is a panel R² of 0.91 a solved problem? | No — 60% is facility identity, 20% is the calendar, 13% is the anomaly |
 | Do epidemic waves propagate between facilities? | No — one synchronous national wave, symmetric lead-lag at every distance |
 | Does laboratory virological surveillance lead demand? | No — it lags. A specimen exists because a patient already presented |
-| How far ahead is the series forecastable? | **Three weeks.** Within-season R² 0.84 / 0.60 / 0.27 at 1 / 2 / 3 weeks, negative beyond |
+| How far ahead is the series forecastable? | **Three weeks.** Within-season R² 0.77 / 0.45 / 0.27 at 1 / 2 / 3 weeks, negative beyond |
 
 ## Architecture
 

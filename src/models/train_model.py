@@ -8,8 +8,15 @@ already holds per facility. They are kept for reporting and as the record of tha
 
 Read `demo()` output top to bottom -- it is the argument for every choice below.
 
-Five things cost real work to learn and must not be undone:
+Six things cost real work to learn and must not be undone:
 
+* **`onset_recall` is the headline, not `recall`.** The aggregate surge metric is 52-64%
+  *continuation* of a surge already under way, which a shift coordinator can see from the waiting
+  room. A one-line rule -- alert iff the facility is already above its own p90 -- beats what ships
+  on recall, precision AND lift in 2025 and in the sealed 2026, at equal or lower spend, while
+  scoring 0.000 on onsets at h=1 because it cannot flag a surge that has not begun. Split the
+  truth set and the model wins where it counts: ~2x the calendar's new surges at matched spend.
+  Scoring the trivial baseline is what exposed this; `demo()` now asserts it. See docs/ §9.1b.
 * **Scored within season, never pooled.** A pooled R2 across seasons rewards a model for
   predicting differences *between* seasons, which no hospital needs a model for. It nearly
   produced a false positive in `03e` -- see context/handoff/handoff-007-virology-and-scope.md.
@@ -260,15 +267,36 @@ def calibrate_thresholds(cal, score, share=ALERT_SHARE):
     return (s.groupby(cal["EstablecimientoCodigo"]).quantile(1 - share), s.quantile(1 - share))
 
 
+def onset_scores(test, alert, truth):
+    """Recall split by whether the surge is NEW. `onset_recall` is the primary metric since
+    2026-07-29; everything else in `score_alerts` is mostly the easy half.
+
+    Returns NaN when the caller built its own frame without the `onset` column -- only
+    `climatology_alerts` does, and it is scored on the aggregate by design.
+    """
+    if "onset" not in test:
+        return {"onset_recall": float("nan"), "contin_recall": float("nan"), "onsets": 0}
+
+    onset = test["onset"]                     # already ANDed with `surge` in alert_frame
+    contin = truth & ~onset
+    return {"onset_recall": int((alert & onset).sum()) / max(int(onset.sum()), 1),
+            "contin_recall": int((alert & contin).sum()) / max(int(contin.sum()), 1),
+            "onsets": int(onset.sum())}
+
+
 def score_alerts(test, pred, thresholds=None):
     """Recall/precision at a fixed alert budget: each facility alerts its own top 10% of weeks.
 
     `pred` ranks the facility's weeks; only the ordering matters, not the units. `test` supplies
-    the boolean `surge` column. This is the metric the project is judged on -- an R2 gain that
-    does not re-order this list is not a result.
+    the boolean `surge` column. An R2 gain that does not re-order this list is not a result.
 
     With `thresholds` the budget is a cut fixed before the season, so the spend is whatever the
     season turns out to deserve; `share` reports what it actually came to.
+
+    **Read `onset_recall`, not `recall`, as the headline (2026-07-29).** `recall` counts surge
+    continuation, which is 52-64% of the truth set and needs no model -- a one-line persistence
+    rule beats what ships on `recall`, `precision` and `lift` while scoring 0.000 on onsets at
+    h=1. That is a fact about this metric, not about the model. `docs/` §9.1b and rule 18.
     """
     alert, truth = alert_flags(test, pred, thresholds), test["surge"]
 
@@ -286,7 +314,27 @@ def score_alerts(test, pred, thresholds=None):
         "share": int(alert.sum()) / max(len(test), 1),
         "lift": precision / max(base_rate, 1e-9),
         "silent": int((~alert.groupby(test["EstablecimientoCodigo"]).any()).sum()),
+        **onset_scores(test, alert, truth),
     }
+
+
+def matched_spend(test, scores, n):
+    """Score every rule in `scores` at the SAME alert count `n`, ranked top-N.
+
+    **The only fair way to compare onset recall.** At each rule's own natural spend the
+    climatology appears to beat what ships on 2026 onsets, 0.305 against 0.191 -- purely because
+    it fires 533 alerts against 294. At matched budget it reverses to 0.137 against 0.206. Rule 5
+    ("compare only at matched spend") caught that, and it caught it twice in one session.
+    """
+    out = {}
+    for label, s in scores.items():
+        rank = pd.Series(np.asarray(s, dtype=float), index=test.index).rank(
+            ascending=False, method="first")
+        # Fed back through score_alerts as a 0/1 score cut at 0.5, so the metrics come from one
+        # implementation rather than a second copy that can drift from it.
+        out[label] = score_alerts(test, (rank <= n).astype(float),
+                                  (pd.Series(dtype=float), 0.5))
+    return out
 
 
 def climatology_alerts(panel, test_year, train_from=None):
@@ -444,7 +492,11 @@ def alert_frame(panel, test_year, h, clim_from=BASELINE_TRAIN_FROM):
     Z, C, L = wide("z"), wide("clim"), wide(Y)
     coords = panel.groupby("EstablecimientoCodigo")[["Latitud", "Longitud"]].first().loc[Z.columns]
     frames = {"z": Z, "z_l1": Z.shift(1), "z_l2": Z.shift(2), "z_d4": Z - Z.shift(4),
-              "clim_fut": C.shift(-h), "lvl_fut": L.shift(-h), **ring_means(Z, coords)}
+              "clim_fut": C.shift(-h), "lvl_fut": L.shift(-h),
+              # For the onset split and the persistence baseline, both added 2026-07-29. `lvl_now`
+              # is the origin week; `lvl_prev` is the week before the TARGET week, which is the
+              # origin week itself when h=1.
+              "lvl_now": L, "lvl_prev": L.shift(-(h - 1)), **ring_means(Z, coords)}
     long = pd.concat({k: v.stack(future_stack=True) for k, v in frames.items()}, axis=1)
     long.index.names = ["t", "EstablecimientoCodigo"]
     long = long.reset_index()
@@ -465,6 +517,16 @@ def alert_frame(panel, test_year, h, clim_from=BASELINE_TRAIN_FROM):
     long["clim_z"] = (long["clim_fut"] - fac.map(level)) / long["scale"]
     long["stage2_z"] = long["beta"] * long["er_hat"]
     long["surge"] = long["lvl_fut"] > long["thr"]
+
+    # Onset vs continuation, 2026-07-29. `surge` is 52-64% continuation of a surge already under
+    # way, and a shift coordinator sees that from the waiting room -- so the aggregate metric is
+    # mostly the half that needs no model. `onset` is the half that does. See docs/ §9.1b.
+    # `surge_now` is the persistence baseline in a single column: "alert iff above p90 already".
+    # Deliberately NOT added to the dropna below -- doing so would change every row count this
+    # project has published. A missing previous week therefore reads as "not in surge", which is
+    # the same treatment the scratch measurement used, so the recorded figures stay comparable.
+    long["surge_now"] = long["lvl_now"] > long["thr"]
+    long["onset"] = long["surge"] & ~(long["lvl_prev"] > long["thr"])
 
     static = panel.groupby("EstablecimientoCodigo")[STATIC].first()
     for col in STATIC:
@@ -535,6 +597,16 @@ def prospective_alerts(panel, test_year, h, features=DEPLOYED_FEATURES):
             # Two cuts, one per budget regime. Not shipped until measured -- rule 8.
             "two regime": score_alerts(test, test[col], two_regime_cuts(cal, cal[col])),
         }
+
+    # The trivial baseline, added 2026-07-29 after an audit found it had never been scored: alert
+    # iff the facility is ALREADY above its own p90. No training, no features, no cut to calibrate
+    # -- it is a boolean, so the threshold is 0.5 and the spend is whatever the season's base rate
+    # comes to. It beats what ships on recall, precision AND lift in 2025 and in the sealed 2026,
+    # at equal or lower spend, and scores 0.000 on onsets at h=1 because it structurally cannot
+    # flag a surge that has not begun. That contrast is the entire argument for reading
+    # `onset_recall`. Rule 18: score the trivial baseline before believing a headline.
+    out["persistence"] = {"fixed": score_alerts(test, test["surge_now"].astype(float),
+                                                (pd.Series(dtype=float), 0.5))}
     return out
 
 
@@ -611,6 +683,9 @@ def write_alert_list(panel, test_year, horizons=HORIZONS, path=ALERT_LIST, hospi
             "cut": cut,
             "alert": (test["prob"] >= cut).to_numpy(),
             "observed_surge": test["surge"].to_numpy(),   # blank in live use; the target week
+            # Whether that surge was NEW. Carried so a consumer can score the list on the metric
+            # that matters without rebuilding the panel -- see `onset_scores`.
+            "observed_onset": test["onset"].to_numpy(),
         }))                                               # has not happened yet
 
     df = pd.concat(out, ignore_index=True).sort_values(
@@ -794,6 +869,65 @@ def demo():
                 tag = "national (SHIPPED)" if rule == "national" else "two regime @0.20"
                 print(f"{test_year:<6}{h:<3}{tag:<20}{s['recall']:>9.3f}{s['precision']:>8.3f}"
                       f"{s['lift']:>7.2f}{s['share'] * 100:>7.1f}%")
+
+    print("\n\nOnset vs continuation -- THE PRIMARY METRIC SINCE 2026-07-29")
+    print("Every `recall` above is 52-64% surge CONTINUATION, and a shift coordinator sees an")
+    print("ongoing surge from the waiting room. So the trivial rule -- alert iff already above")
+    print("p90 -- beats what ships on recall, precision and lift in 2025 and in the sealed 2026.")
+    print("That is a fact about the metric. Split the truth set and the picture inverts: at")
+    print("MATCHED spend the shipped model takes roughly 2x the calendar's NEW surges and ~4x")
+    print("persistence's, while persistence scores 0.000 at h=1 because it cannot flag a surge")
+    print("that has not begun. Onsets are 36% (2024), 44% (2025), 48% (2026) of all surge weeks.")
+    print("Hospital-ER scope. Every rule gets the shipped rule's own alert count -- rule 5.")
+    print(f"\n{'test':<6}{'h':<3}{'rule':<20}{'onset':>8}{'contin':>8}{'all':>8}{'prec':>8}"
+          f"{'N':>7}")
+    onset_seasons = (2024, 2025, 2026)
+    onset_cells = {}
+    for test_year in onset_seasons:
+        for h in HORIZONS:
+            cal = stage3_predict(ueh, test_year - 1, h)[1]
+            _, test = stage3_predict(ueh, test_year, h)
+            n = int((test["prob"] >= cal["prob"].quantile(1 - ALERT_SHARE)).sum())
+            # Persistence is a boolean, so a top-N ranking has to break its ties. Broken by the
+            # model's own score, which is the CHARITABLE choice: when n exceeds the number of
+            # facilities already in surge it hands persistence the model's next-best rows, and
+            # that borrowed tail is where its onset recall (0.000 -> 0.053) comes from. A baseline
+            # you intend to beat should be given every advantage.
+            r = matched_spend(test, {"climatology": test["clim_z"],
+                                     "stage 3 (SHIPPED)": test["prob"],
+                                     "persistence": test["surge_now"].astype(float)
+                                     + 1e-6 * test["prob"]}, n)
+            onset_cells[(test_year, h)] = r
+            for name, s in r.items():
+                print(f"{test_year:<6}{h:<3}{name:<20}{s['onset_recall']:>8.3f}"
+                      f"{s['contin_recall']:>8.3f}{s['recall']:>8.3f}{s['precision']:>8.3f}"
+                      f"{n:>7,}")
+            first = next(iter(r.values()))
+            print(f"{'':<6}{'':<3}{'':<20}({first['onsets']:,} onsets of {first['surges']:,} "
+                  f"surges = {first['onsets'] / max(first['surges'], 1):.0%}, "
+                  f"{len(test):,} rows)")
+
+    # Regression guard on the finding itself. Asserted at h=1 only, where the margin is the width
+    # of persistence's structural zero (0.109-0.206 against 0.000-0.053) and cannot be flipped by
+    # the run-to-run jitter documented in docs/ §9.3. The h=2 2025 cell is 0.217 vs 0.203 -- real,
+    # but too narrow to assert on a non-reproducible fit.
+    for test_year in onset_seasons:
+        cell = onset_cells[(test_year, 1)]
+        got, triv = cell["stage 3 (SHIPPED)"]["onset_recall"], cell["persistence"]["onset_recall"]
+        assert got > triv, (f"the shipped model no longer beats persistence on NEW surges at "
+                            f"h=1 in {test_year}: {got:.3f} vs {triv:.3f}. The product's whole "
+                            f"claim is onset recall -- do not paper over this with aggregate lift.")
+
+    def cells_won(against):
+        return sum(r["stage 3 (SHIPPED)"]["onset_recall"] > r[against]["onset_recall"]
+                   for r in onset_cells.values())
+
+    print(f"\nOK  shipped model beats PERSISTENCE on new surges at h=1 in all "
+          f"{len(onset_seasons)} seasons (asserted)")
+    for against in ("climatology", "persistence"):
+        won = cells_won(against)
+        print(f"{'OK' if won >= 4 else '--'}  and beats {against:<12} on onset recall in "
+              f"{won} of {len(onset_cells)} season x horizon cells")
 
     print("\n\nCalibration -- WHY THE SERVED COLUMN IS `score` AND NOT `surge_probability`")
     print("Isotonic fitted on the prior season, measured here and rejected: it makes the gap")

@@ -263,22 +263,117 @@ at a time. Written to `data/processed/alert_list.parquet` — one row per (facil
 with the probability, the cut and the alert flag. That file is the serving interface; nothing
 downstream imports the model.
 
-**Measured at the operating point, h = 1, expanding window, scored within each test year:**
+**Measured on the product's own population — 180 hospital emergency departments — h = 1, expanding
+window, scored within each test year:**
 
-| | test 2025 | test 2024 |
-| :--- | ---: | ---: |
-| climatology (the baseline to beat) | 0.231 / 0.185 · lift 2.41 | 0.253 / 0.352 · lift 2.65 |
-| **this model** | **0.335 / 0.507 · lift 6.63** | **0.447 / 0.722 · lift 5.43** |
+| | test 2026 *(sealed)* | test 2025 | test 2024 |
+| :--- | ---: | ---: | ---: |
+| surge base rate | 0.055 | 0.070 | 0.108 |
+| climatology (the baseline to beat) | 0.212 / 0.109 · lift 1.98 | 0.184 / 0.150 · lift 2.13 | 0.174 / 0.304 · lift 2.81 |
+| **this model** | **0.478 / 0.437 · lift 7.94** | **0.464 / 0.498 · lift 7.06** | **0.397 / 0.672 · lift 6.21** |
+| **margin over climatology** | **4.01×** | **3.32×** | **2.21×** |
 
-(recall / precision, then precision ÷ base rate.) At h = 2: 0.268 / 0.374 · lift 4.89, and
-0.412 / 0.632 · lift 4.75. Roughly one alert in two lands on a real surge in 2025 and nearly three
-in four in 2024, against 0.185 and 0.352 for the calendar.
+(recall / precision, then precision ÷ base rate, then the ratio of the two lifts.) At h = 2:
+0.267 / 0.283 · lift 5.16 · margin **2.69×** (2026); 0.334 / 0.329 · lift 4.66 · margin 2.20×
+(2025); 0.309 / 0.620 · lift 5.73 · margin 2.04× (2024).
 
-**Read lift, not recall, when comparing budget rules.** A prospective cut spends what the season
-deserves — 5.1% of facility-weeks in quiet 2025, 8.2% in wave-year 2024 — so recall figures measured
-at different spends are not the same measurement. Under the earlier within-year rank at a forced 10%
-this model scored 0.306 / 0.245 and 0.393 / 0.547; those numbers remain the ones comparable to `03d`
-and are not deployable, because ranking week 30 against week 45 requires week 45 to have happened.
+Restricting from all 632 facilities to the 180 that can act on an alert *improves* the product, and
+did so again on the sealed season: the full panel scores lift 6.63 (2025), 5.43 (2024) and 6.23
+(2026) at h = 1, with margins of 2.85×, 2.05× and 2.78×. The earlier full-panel figures are retained
+here because §9.2's ablation and §9.4's stage tables are computed on them.
+
+**Reproducibility — read §9.3's last bullet before quoting any digit here.** These figures come from a
+single-threaded (`OMP_NUM_THREADS=1`) run. That is the most stable protocol available, **but it is not
+sufficient**: separate processes still disagree, and 2026 h=1 lift has been observed at 7.94–8.10 across
+five runs. Quote these as one draw, not as canonical.
+
+### 9.1b. The metric was measuring the easy half of the target
+
+**Every figure in the table above is 52–64% composed of surge *continuation*, and continuation needs no
+model.** This was found by auditing the holdout rather than by running it, and it is the most important
+qualification in this document.
+
+Split each surge week by whether it is new:
+
+| | definition | share of all surge weeks |
+| :--- | :--- | ---: |
+| **onset** | above p90 at the target week, **not** above it the week before | 36% (2024), 44% (2025), **48% (2026)** |
+| **continuation** | above p90 at the target week **and** the week before | the rest |
+
+A shift coordinator can see an ongoing surge from the waiting room. **Onset is what an early-warning
+system is for**, and it is the harder half. So the comparator has to be a rule that exploits
+continuation and nothing else: **alert next week iff this facility is above its p90 this week** — one
+line, no training, no features.
+
+**On the aggregate metric this project has reported since day one, that one-liner beats the shipped
+model** — in 2025 and in the sealed 2026, at equal or lower spend (2026 h=2: recall 0.315 vs 0.260,
+precision 0.335 vs 0.273, both at 5.2%). A zero-parameter rule beating the model means the metric is
+wrong, not that the model is worthless — and splitting the truth set shows why.
+
+**At matched spend** (every rule given the model's own alert count, ranked top-N):
+
+| season | h | onset recall: climatology | **this model** | persistence | continuation recall: model / persistence |
+| ---: | ---: | ---: | ---: | ---: | :--- |
+| 2024 | 1 | **0.142** | 0.100 | 0.000 | 0.562 / 0.684 |
+| 2024 | 2 | 0.117 | **0.119** | 0.061 | 0.415 / 0.449 |
+| 2025 | 1 | 0.121 | **0.173** | 0.000 | 0.693 / 0.970 |
+| 2025 | 2 | 0.128 | **0.217** | 0.203 | 0.429 / 0.614 |
+| **2026** *(sealed)* | **1** | 0.137 | **0.206** | 0.053 | 0.769 / 1.000 |
+| **2026** *(sealed)* | **2** | 0.123 | **0.154** | 0.092 | 0.371 / 0.517 |
+
+*Printed by `demo()`; reproduce with `OMP_NUM_THREADS=1 python src/models/train_model.py`.*
+
+**This is the model's real result, and it is a better one than the headline.** At a fixed budget it
+identifies roughly **twice as many new surges as the seasonal calendar** and **about four times as many
+as persistence**, on a season used for no decision. It wins **5 of 6** season×horizon cells against the
+calendar (losing only 2024 h=1) and **6 of 6** against persistence. Persistence scores **0.000 at h=1 by
+construction** — it cannot flag a surge that has not begun — so its aggregate win is won entirely on the
+half that does not need forecasting.
+
+**All of the above is computed and asserted by `train_model.py`**, not by a one-off script:
+`score_alerts` returns `onset_recall` and `contin_recall` alongside the aggregate, `alert_frame` carries
+the `onset` and `surge_now` columns, `prospective_alerts` reports the persistence baseline, `demo()`
+prints this table and **asserts that the shipped model beats persistence on new surges at h=1 in all
+three seasons**, and the served `alert_list.parquet` carries `observed_onset`. The assertion is
+deliberately restricted to h=1, where the margin is the width of persistence's structural zero
+(0.100–0.206 against 0.000–0.053) and cannot be flipped by the run-to-run jitter in §9.3; the 2025 h=2
+cell is a genuine 0.217 against 0.203, too narrow to assert on a fit that is not reproducible.
+
+**Consequences for how this document should be read.** Onset recall is the primary metric from here on,
+reported alongside the aggregate and never without matched spend. The aggregate figures in §9.1 stand as
+correct measurements of a quantity that overstates early-warning skill. Persistence joins climatology as
+a permanent baseline; climatology alone is too weak a comparator, and this document previously implied
+that beating it settled the question.
+
+*One caution recorded so it is not rediscovered: at each rule's **natural** spend, climatology appears to
+beat the model on 2026 onset recall, 0.305 against 0.191. That is a spend artefact — it fires 533 alerts
+against 294. At matched budget it reverses. Compare only at matched spend; the table above does.*
+
+*Not tested, deliberately: climatology and the model catch **different** onsets, so a union or a
+re-weighting may raise onset recall materially. Testing it on 2026 would be tuning on the sealed season.
+It is a hypothesis for a future season.*
+
+**Read lift, not recall, when comparing budget rules — and neither when comparing seasons.** A
+prospective cut spends what the season deserves — 5.1% of facility-weeks in quiet 2025, 8.2% in
+wave-year 2024, 6.1% in 2026 — so recall figures measured at different spends are not the same
+measurement. Under the earlier within-year rank at a forced 10% this model scored 0.306 / 0.245 and
+0.393 / 0.547 on the full panel; those numbers remain the ones comparable to `03d` and are not
+deployable, because ranking week 30 against week 45 requires week 45 to have happened.
+
+**Across seasons, lift is the wrong figure and the margin is the right one.** `lift = precision ÷
+base_rate`, and the base rate is the season's severity — the very thing being forecast. The 2026
+column shows the trap directly: lift *rises* from 7.06 to 7.95 while precision *falls* from 0.498 to
+0.437, because the base rate fell further (0.070 → 0.055). The margin cancels the shared denominator
+and reduces to precision(model) ÷ precision(climatology), so it compares seasons honestly. This was
+learned by falsifying a pre-registered prediction rather than by reasoning — the 2026 holdout
+predicted a lift of 5.0 with a ceiling of 7.5, and the mechanism behind that prediction was wrong.
+
+**The 2026 column is a sealed holdout and is the strongest claim in this document.** Features, the
+climatology window, the alert cut and the hospital scope were all selected on 2024 and 2025; 2026 was
+never consulted for any decision. The protocol, expected numbers and falsification thresholds were
+pre-registered in `context/specs/2026-sealed-holdout.md`, the test was run once against a pinned
+snapshot (2026-07-29, 5,006 facility-weeks, weeks 1–28), all four acceptance criteria were met, and
+nothing was adjusted afterwards. It validates the pipeline, not the construct — see §9.3.
 
 Everything fitted — the climatology, the per-facility scale, the p90 surge threshold — comes from
 seasons strictly before the test year. Training rows start post-COVID (2022): a p90 fitted on
@@ -331,10 +426,16 @@ this document previously claimed it was.
   both rules covers ascent *and* peak (0.343 / 0.727, recall 0.547) at 1.7× the budget. **No rule
   dominates**; the choice depends on whether an alert is for anticipation or for triage, which is a
   clinical question the project has not asked.
-- **~30% of facilities get no alert at all in a quiet season**, 185 of 609 in 2025 and 66 in 2024.
-  Measured cost: **only 3.2% (2025) and 1.1% (2024) of all surges** land in a facility that is never
-  warned, and there is no volume bias (median 141 vs 140 weekly attentions). Smaller concern than it
-  first appeared; it is a communication question, not a coverage failure.
+- **A third of hospital emergency departments hear nothing in a quiet season.** On the product's own
+  scope: **65 of 180 in 2026** at h=1 and 48 of 180 in 2025, against 22 in wave-year 2024. The
+  pre-registered holdout expected 10–50 and this is the one prediction that missed in the unfavourable
+  direction. It follows from the 6% realised spend rather than from a modelling defect — a cut fixed on
+  a quiet season, applied to a quieter one, simply fires less. The earlier measurement that silent
+  facilities cost only 3.2% (2025) and 1.1% (2024) of all surges, with no volume bias, was taken on the
+  **full 609-facility panel** and does not transfer to this scope: it has not been re-measured on the
+  180, and a quiet sealed season is exactly where it would be weakest. **Open.** An interface that must
+  tell a third of its hospitals "nothing this winter" needs to know what those facilities' surges
+  actually were before it is designed.
 - **The model produces a ranking, not a probability, and that is structural.** The raw score is
   badly calibrated (top decile 0.569 predicted vs 0.398 observed in 2025; 0.837 vs 0.680 in 2024).
   Isotonic regression on the calibration season was implemented and **made it worse** — mean decile
@@ -347,9 +448,28 @@ this document previously claimed it was.
   on 2022 alone. Thin — and the 2024 spend drifting to 11.4% is what that thinness looks like.
 - **The ablation is two holdout years and one seed.** A 0.005 delta is within noise, and there is now
   direct evidence for that: re-running the identical module moves the neighbour-ring variants by
-  0.002–0.003 recall (0.318 → 0.315 in 2025), presumably `HistGradientBoostingClassifier`'s threaded
-  histogram accumulation. The non-ring rows reproduce exactly. The claim is "the national wave is
-  negligible here", not "it is exactly zero".
+  0.002–0.003 recall (0.318 → 0.315 in 2025). The claim is "the national wave is negligible here",
+  not "it is exactly zero".
+- **The default multi-threaded fit is not reproducible, and on a small season the drift is visible in
+  the second decimal.** `random_state=0` is set, so this is not a seeding gap: it is floating-point
+  non-associativity in `HistGradientBoostingClassifier`'s threaded histogram accumulation, and the
+  0.002–0.003 estimated above was measured on 2025 and understates it. Three runs of the 2026 sealed
+  season gave h=2 recall **0.260 / 0.282 / 0.267** and lift **4.98 / 5.19 / 5.16**. The cause of the
+  amplification is arithmetic, not modelling: 274 surges in 4,984 rows at a ~6% spend means six surges
+  crossing the alert cut moves recall by 0.022. `OMP_NUM_THREADS=1` is the protocol §9.1 uses and it is
+  the most stable available, **but it is not a fix**: repeated calls inside one process agree, while
+  separate single-threaded processes do not. Observed spread for 2026 h=1 lift across five runs:
+  **7.94 / 7.95 / 8.00 / 8.10**. **It is not confined to 2026, and an earlier version of this bullet
+  wrongly said it was** — two consecutive single-threaded `demo()` runs gave 2024 hospital-scope h=1 lift
+  of **6.21 and 6.35**, and high complexity 6.70 and 6.50. The impression that 2024 and 2025 reproduced
+  exactly came from too few runs; it was luck of the draw, not a property of a larger surge count.
+  **Useful diagnostic for whoever fixes it:** in the one pair that could be compared row for row, true
+  positives were stable at 131 while the alert count moved 300 → 294 — so the test-season *scores*
+  reproduce and the drift is in the *calibration* season's probabilities, which set the cut through a
+  quantile. Cause not isolated. Every acceptance criterion holds across the whole observed spread, and
+  every comparison in §9.1b is computed within a single process on one frame, so no conclusion in this
+  document depends on which run is quoted — **the digits do, and none of them should be quoted to three
+  decimals outside this repository until this is fixed.** This is the top item in §11.
 - **2025 is a quiet season and nothing helps much in it.** 6.9% of facility-weeks above p90 against
   13.4% in 2024. Handed the *realised* national anomaly, the allocation still does not beat the
   calendar in 2025 — in a quiet year the surges that occur are local.
@@ -455,8 +575,17 @@ vitalflow/
 
 ## 11. Immediate Next Steps
 
-Modelling is done and the acceptance criteria are settled — §9.1 for what ships, `train_model.py`
-for the numbers. What is left:
+Modelling and validation are done — §9.1 for what ships, §9.1b for the metric that judges it,
+`train_model.py` for the numbers. What is left:
+
+0. **Make the pipeline reproducible. This blocks publishing anything outside the repository.**
+   `random_state=0` is set and `OMP_NUM_THREADS=1` is not sufficient: separate processes disagree, in
+   every season (§9.3). The diagnostic points at the **calibration** season's fitted probabilities rather
+   than the test season's, because true positives held at 131 while the alert count moved 300 → 294 — so
+   it is the cut that wanders. Unchecked candidates: BLAS/OpenMP build differences between invocations,
+   `categorical_features="from_dtype"` category ordering varying with frame construction order, and
+   non-deterministic `groupby` ordering upstream in `alert_frame`. Until this closes, every figure in this
+   document is one draw.
 
 1. ~~**Turn the alert budget into a score threshold.**~~ **Done 2026-07-28** — a national P(surge)
    cut fixed on the previous season. The protocol turned out to be pessimistic, not optimistic:
@@ -473,20 +602,32 @@ definition.
 3. ~~**Measure the settling curve.**~~ **Done 2026-07-29.** 19.1% complete at age zero, 97.8% at
    seven days, 99.5% at fourteen. Serving origin W−1, operational horizon h=2, and
    `load_weekly_target` now trims the unsettled tail for every caller.
-4. **Calibrate the probability** — isotonic regression on the calibration season already being
-   computed. Until then the served column is a score wearing a probability's name.
-5. **Run 2026 as a sealed holdout.** 28 weeks, 632 facilities, never used for any decision — the
-   feature set, the climatology window and the budget rule were all chosen on 2024 and 2025, which
-   are also the years AC2 reports. Write the expected numbers down before running, run once, and do
-   not tune on it afterwards.
+4. ~~**Calibrate the probability.**~~ **Tried 2026-07-29 and rejected — it makes calibration worse.**
+   Isotonic regression on the calibration season moved the mean decile gap 0.030 → 0.035 (2025) and
+   0.058 → 0.210 (2024), for the structural reason in §9.3: the base rate moves between seasons and
+   *which season it is* is the forecast target. The served column is named `score`, and the interface
+   may show a rank or a within-season percentile — never a percentage chance.
+5. ~~**Run 2026 as a sealed holdout.**~~ **Run 2026-07-29, once, and it passed all four acceptance
+   criteria.** 28 settled weeks over the 180 hospital emergency departments, against a pinned snapshot,
+   pre-registered in `context/specs/2026-sealed-holdout.md` before the data was touched. h=2 lift 5.16
+   against climatology 1.92 — margin 2.69×, floor 2× — and h=1 beat the baseline on both recall and
+   precision. **The selection risk is retired:** the feature set, the climatology window, the budget
+   rule and the hospital scope were all chosen on 2024 and 2025, and the ranking transfers to a season
+   none of them saw, at the best margin of the three. Two by-products matter more than the pass: lift
+   is not comparable across seasons (§9.1), and the multi-threaded fit is not reproducible (§9.3).
 6. **Test the target against REM20.** Does a week above the facility's own p90 coincide with any
-   measurable strain — occupancy, length of stay, diversion? The document is titled *saturation*
-   and the target is a demand percentile; these are different constructs and the gap has never been
-   measured. A null result is worth having, and it is far cheaper now than after deployment.
+   measurable strain — occupancy, length of stay, diversion? This is the open question the holdout
+   explicitly does not answer: it validated the pipeline, not the construct. Scoped 2026-07-29 by
+   inspecting the file — hospital emergency departments only (179 of 180 join; 0 of 446 ambulatory),
+   at facility-month granularity, with `INDICE_OCUPACIONAL` as the primary outcome. A null result is
+   worth having, and it is far cheaper now than after deployment.
+   **`IdCausa = 34` ("TOTAL DEMANDA")** is the parallel lead: an unexamined daily-file row running 8.5%
+   above total attentions, which — if it is unmet demand — is the capacity denominator this project has
+   never held, and the only one that would exist for the ambulatory facilities.
 7. **Automate the weekly refresh and build the interface**, once 2–4 have settled what is served.
    The refresh must assert tail completeness — refuse to serve on a short week.
 8. **Re-check the ablation** when a third holdout year exists. The conclusion that the national
    wave is negligible rests on two years and deltas of 0.005 — the same size as the run-to-run
    noise documented in §9.3.
-5. **Only then** revisit covariates, against the filter in §8.2: not seasonal, not static, not
+9. **Only then** revisit covariates, against the filter in §8.2: not seasonal, not static, not
    contemporaneous.
