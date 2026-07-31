@@ -91,6 +91,14 @@ def load_weekly_target(year_min=None, year_max=None, con=None, drop_unsettled=Tr
     FROM read_parquet('{WEEKLY_PARQUET.as_posix()}')
     WHERE {' AND '.join(where)}
     GROUP BY ALL
+    -- Not cosmetic: DuckDB's parallel hash aggregate emits groups in thread-scheduling
+    -- order, so without this every process got a different row order for identical data.
+    -- Every groupby mean/std downstream accumulates in row order, so `z` came out
+    -- differing in the last bits, which moved HistGradientBoosting's split points and
+    -- with them the alert cut. That was the cross-process irreproducibility of
+    -- 2026-07-29 (h=1 lift 7.94-8.10). Measured: 3 processes, 3 different row-order
+    -- hashes before, one after. See decisions/log.md, 2026-07-30.
+    ORDER BY EstablecimientoCodigo, Anio, SemanaEstadistica
     """
     con = con or duckdb.connect()
     df = con.execute(query).df()
@@ -290,7 +298,16 @@ def demo():
 
     df = load_weekly_target(2023, 2025)
     assert (df["SemanaEstadistica"] != 53).all(), "week 53 leaked through"
-    assert not df.duplicated(["EstablecimientoCodigo", "Anio", "SemanaEstadistica"]).any()
+    keys = ["EstablecimientoCodigo", "Anio", "SemanaEstadistica"]
+    assert not df.duplicated(keys).any()
+
+    # The one check that costs nothing and protects the whole pipeline's reproducibility: a
+    # parallel GROUP BY returns rows in thread-scheduling order, every groupby mean downstream
+    # accumulates in that order, and the fitted model's split points follow. Delete the ORDER BY
+    # and this fails. See decisions/log.md, 2026-07-30.
+    ordered = df[keys].reset_index(drop=True)
+    assert ordered.equals(ordered.sort_values(keys, ignore_index=True)), \
+        "load_weekly_target returned unsorted rows -- the fit will not reproduce across processes"
     resid = df["Total_Respiratorias"] - df[
         ["Menores_1", "De_1_a_4", "De_5_a_14", "De_15_a_64", "De_65_y_mas"]
     ].sum(axis=1)

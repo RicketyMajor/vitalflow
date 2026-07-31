@@ -8,7 +8,7 @@ already holds per facility. They are kept for reporting and as the record of tha
 
 Read `demo()` output top to bottom -- it is the argument for every choice below.
 
-Six things cost real work to learn and must not be undone:
+Seven things cost real work to learn and must not be undone:
 
 * **`onset_recall` is the headline, not `recall`.** The aggregate surge metric is 52-64%
   *continuation* of a surge already under way, which a shift coordinator can see from the waiting
@@ -17,6 +17,12 @@ Six things cost real work to learn and must not be undone:
   scoring 0.000 on onsets at h=1 because it cannot flag a surge that has not begun. Split the
   truth set and the model wins where it counts: ~2x the calendar's new surges at matched spend.
   Scoring the trivial baseline is what exposed this; `demo()` now asserts it. See docs/ §9.1b.
+* **Two significant figures, never three.** The fit is bit-reproducible across processes since
+  2026-07-30 (the `ORDER BY` in `load_weekly_target` -- delete it and nothing here reproduces),
+  but it stays *sensitive*: permuting the panel's row order, same data and same seed, moves 2026
+  h=1 lift across 7.94-8.31 and onset recall across 0.191-0.221. A hard threshold on 274 surges
+  in 4,984 rows amplifies last-bit differences that are invisible in the scores. Every AC holds
+  across that envelope; a "5 of 6 cells" claim that rested on 0.002 did not. See docs/ §9.3.
 * **Scored within season, never pooled.** A pooled R2 across seasons rewards a model for
   predicting differences *between* seasons, which no hospital needs a model for. It nearly
   produced a false positive in `03e` -- see context/handoff/handoff-007-virology-and-scope.md.
