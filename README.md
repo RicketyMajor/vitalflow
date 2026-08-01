@@ -52,12 +52,23 @@ season, against the seasonal calendar and against a one-line persistence rule:
 | h=2 *(the operational horizon)* | 0.131 | **0.162** | 0.108 |
 | h=1 | 0.137 | **0.221** | 0.046 |
 
-At a fixed budget the model finds roughly **60% more new surges than the calendar** at h=2 and **60%
-more** at h=1, and four to five times as many as persistence. Persistence scores 0.000 at h=1 by
-construction — it cannot flag a surge that has not started. Across the model's three holdout seasons and
+At a fixed budget the model finds roughly **24% more new surges than the calendar at h=2** and **61%
+more at h=1** — and **1.5× as many as persistence at h=2, 4.8× at h=1**. Persistence scores 0.000 at
+h=1 by construction — it cannot flag a surge that has not started. Across the model's three holdout seasons and
 both horizons it beats the calendar in **4 of 6** season×horizon cells — **both horizons of both
 post-2024 seasons** — ties one and loses 2024 h=1; it beats persistence in **6 of 6**.
 `src/models/train_model.py` asserts the h=1 result on every run.
+
+> **Read the h=2 row across all three seasons, not just this one — and 2026 is the model's best.**
+> Against the seasonal calendar, the h=2 onset margin is **+0.00 in 2024** (0.117 vs 0.117, an exact
+> tie), **+0.09 in 2025** (0.217 vs 0.128) and **+0.03 in 2026** (0.162 vs 0.131). The 2026 cell moves
+> across 0.154–0.162 under row-order permutation, so that +0.03 is really **+0.02 to +0.03**.
+>
+> **h=2 is the only horizon that deploys.** DEIS publishes a week the day it closes, ~19% complete, so
+> the serving origin is the week before last: h=1 is a correct measurement of a horizon the product
+> does not have. The h=1 figures are reported because they are true and because they bound what a
+> faster data feed would buy — not because they are the product. **The core claim is thinner at its
+> operational horizon than a single-season table conveys**, and that is stated here deliberately.
 
 On the **aggregate** metric — all surge weeks, onsets and continuations together — the figures are recall
 0.500 / precision 0.457 at h=1 and 0.282 / 0.284 at h=2, against a climatology of 0.109 and 0.105: a

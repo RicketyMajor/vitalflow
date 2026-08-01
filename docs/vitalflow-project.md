@@ -200,7 +200,7 @@ operates, and reaches the current week.
 | **CR2 Explorador Climático** | Alternative climate series, possibly weekly | — | Downloaded, never examined |
 | **INE Censo 2024 / DPA** | Comunal geometries and administrative codes | 2024 | Downloaded, unused |
 | **IGVUST** | Socio-territorial vulnerability index per comuna | — | Downloaded, unused. Static, so it can only explain between-facility variance — which climatology already absorbs |
-| **DEIS REM20** | Hospitalisation process indicators | to 2026-06 | Downloaded, unused; candidate capacity proxy for defining saturation rather than demand |
+| **DEIS REM20** | Hospitalisation process indicators | to 2026-06 | **Used 2026-07-31 — the construct-validity test, and the only source that has not failed.** Monthly bed occupancy for 179 of 180 hospital ERs, 0 of 446 ambulatory. Not a model feature: it is the outcome the target was validated *against* (§ next steps, item 6) |
 
 > **A pattern worth naming.** Every exogenous source tested so far has failed for the same reason: it
 > is either seasonal (and so redundant with the calendar), static (and so redundant with facility
@@ -328,8 +328,9 @@ is wrong, not that the model is worthless — and splitting the truth set shows 
 bit-reproducible without a thread setting.*
 
 **This is the model's real result, and it is a better one than the headline.** At a fixed budget it
-identifies roughly **60% more new surges than the seasonal calendar** and four to five times as many as
-persistence, on a season used for no decision. It beats the calendar in **4 of 6** season×horizon cells,
+identifies roughly **61% more new surges than the seasonal calendar at h=1** — and **24% more at h=2**,
+which is the horizon that deploys — and **4.8× as many as persistence at h=1, 1.5× at h=2**,
+on a season used for no decision. It beats the calendar in **4 of 6** season×horizon cells,
 **ties** 2024 h=2 and loses 2024 h=1, and beats persistence in **6 of 6**. The cleaner statement of the
 same table: it wins **both horizons of both post-2024 seasons** and does not beat the calendar in 2024 at
 all. Persistence scores **0.000 at h=1 by construction** — it cannot flag a surge that has not begun — so
@@ -341,6 +342,36 @@ its aggregate win is won entirely on the half that does not need forecasting.
 > Nothing about the model changed. This is the clearest available illustration of why this document now
 > quotes two significant figures: a *count of cells won* is a hard threshold, and a hard threshold on a
 > narrow gap inherits the full width of the envelope in §9.3.
+
+#### The h=2 column is the product, and it is thinner than the h=1 column
+
+*Added 2026-07-31, from an observation recorded 2026-07-30. It was found by re-reading the re-pinned
+table above rather than by running anything, and it re-ordered the roadmap.*
+
+**Read the table by column, not by row.** The h=1 figures are quoted everywhere in this project
+because they are the impressive ones. They are also correct measurements of a horizon **the product
+does not have**: DEIS publishes a week the day it closes at ~19% of its eventual value (§ settling
+curve), so the serving origin is W−1 and the operational horizon is h=2.
+
+| season | h=2 onset recall: climatology | **shipped model** | margin |
+| ---: | ---: | ---: | ---: |
+| 2024 | 0.117 | 0.117 | **+0.00 — exact tie** |
+| 2025 | 0.128 | 0.217 | +0.09 |
+| 2026 *(sealed)* | 0.131 | 0.162 | **+0.03** |
+
+The 2026 cell moves across **0.154–0.162** under row-order permutation (§9.3), so that +0.03 is
+really **+0.02 to +0.03**.
+
+**Nothing above is withdrawn.** AC9 holds, the model beats persistence at h=2 in all three seasons,
+and it wins both horizons of both post-2024 seasons. But the honest summary of the operational
+horizon is: **the model is clearly better than the seasonal calendar in one of three seasons, tied in
+another, and modestly ahead in the sealed one.** Any reader who takes "0.221 against 0.137" as the
+product's margin has been given the wrong number, and this document supplied it for two days before
+this subsection was written.
+
+**Where that puts the remaining effort:** on the objective/metric mismatch and the unused training
+seasons (`context/specs/model-headroom.md`, both pre-registered), not on a larger model — the horizon
+wall and the ablation close that.
 
 **All of the above is computed and asserted by `train_model.py`**, not by a one-off script:
 `score_alerts` returns `onset_recall` and `contin_recall` alongside the aggregate, `alert_frame` carries
@@ -634,15 +665,23 @@ definition.
    none of them saw, at the best margin of the three. Two by-products matter more than the pass: lift
    is not comparable across seasons (§9.1), and the fit was not reproducible — root-caused and fixed
    the next day, in the data loader rather than the model (§9.3, item 0 above).
-6. **Test the target against REM20.** Does a week above the facility's own p90 coincide with any
-   measurable strain — occupancy, length of stay, diversion? This is the open question the holdout
-   explicitly does not answer: it validated the pipeline, not the construct. Scoped 2026-07-29 by
-   inspecting the file — hospital emergency departments only (179 of 180 join; 0 of 446 ambulatory),
-   at facility-month granularity, with `INDICE_OCUPACIONAL` as the primary outcome. A null result is
-   worth having, and it is far cheaper now than after deployment.
-   **`IdCausa = 34` ("TOTAL DEMANDA")** is the parallel lead: an unexamined daily-file row running 8.5%
-   above total attentions, which — if it is unmet demand — is the capacity denominator this project has
-   never held, and the only one that would exist for the ambulatory facilities.
+6. ✅ **Test the target against REM20 — run 2026-07-31, and it PASSES.** Does a week above the
+   facility's own p90 coincide with measurable strain? Pre-registered with predictions, negative
+   controls and a decision rule fixed before any code (`context/specs/rem20-construct-validity.md`),
+   then run once. **A month containing a surge week sits +0.093 SD ≈ +0.50 pp above that facility's
+   own occupancy norm for that month of year** (CI [+0.027, +0.145], 60% of 155 hospital ERs
+   positive, 2022–2026), replicating at **+0.161 SD ≈ +0.93 pp** in 2015–2019 with a monotonic
+   dose-response. **The negative-control wards — obstetrics and adult psychiatry — are flat in both
+   windows**, which is what separates respiratory strain from "the hospital is busy in winter".
+   **The seasonal control was worth 4×–5.6×**: raw, the same contrast reads +1.96 pp and +5.24 pp.
+   *Three things this does not license:* a magnitude claim (half a percentage point of occupancy is
+   small), converting the monthly effect into a weekly one (it is a **lower bound**, and the
+   arithmetic is an assumption), and **anything about the 446 ambulatory facilities carrying 73.7% of
+   volume** — 0 of them appear in any bed report and none is testable with data on disk.
+   **`IdCausa = 34` ("TOTAL DEMANDA") is still open** and is the parallel lead: an unexamined
+   daily-file row running 8.5% above total attentions, which — if it is unmet demand — is the capacity
+   denominator this project has never held, and the only one that would exist for ambulatory
+   facilities. It needs one question to a physician.
 7. **Automate the weekly refresh and build the interface**, once 2–4 have settled what is served.
    The refresh must assert tail completeness — refuse to serve on a short week.
 8. **Re-check the ablation** when a third holdout year exists. The conclusion that the national

@@ -1,0 +1,480 @@
+<title>VitalFlow — Interfaz de alerta (maqueta)</title>
+<style>
+  /* ---------------------------------------------------------------------------
+     VitalFlow alert interface — static mockup.
+
+     Design direction: "la pizarra del turno" (the shift whiteboard). Every choice
+     below is answerable to a measurement in context/decisions/log.md:
+
+       - The CALM screen is the primary screen, not an empty state. 40% of hospital
+         ERs receive no alert across a whole season, and for 72% of them that
+         silence is CORRECT (they had no surge). Audit 2026-07-30.
+       - No probability is ever displayed. Calibration was measured and rejected
+         (2026-07-29); `score` is a ranking. The interface shows a rank.
+       - No third decimal anywhere. Row-order sensitivity envelope, 2026-07-30.
+       - Horizon is h=2 from origin W-1: the last CLOSED epidemiological week.
+       - Triage colours (red/amber/green) are deliberately unused: in a Chilean ER
+         they already carry a specific clinical meaning. Calm has no colour at all;
+         one institutional ink marks an alert.
+     ------------------------------------------------------------------------- */
+
+  :root {
+    color-scheme: light dark;
+
+    --muro:      #e9edea;   /* pale green-cold wall under fluorescent light */
+    --pizarra:   #f7f9f7;   /* the board itself */
+    --hueco:     #dfe4e1;   /* inset wells, unwatched weeks */
+    --borde:     rgba(20, 26, 24, 0.11);
+    --borde-int: rgba(20, 26, 24, 0.07);
+    --tinta:     #141a18;   /* primary text */
+    --rotulo:    #56635e;   /* secondary */
+    --tenue:     #8b968f;   /* metadata */
+    --alerta:    #1f4a7a;   /* MINSAL institutional blue. THE ONLY ACCENT. */
+    --alerta-df: rgba(31, 74, 122, 0.12);
+    --campana:   rgba(31, 74, 122, 0.05);
+
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+    --prosa: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+    --u: 4px;
+    --r-chico: 3px;
+    --r-medio: 6px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --muro:      #0f1412;
+      --pizarra:   #161d1a;
+      --hueco:     #1e2623;
+      --borde:     rgba(232, 237, 234, 0.10);
+      --borde-int: rgba(232, 237, 234, 0.06);
+      --tinta:     #e8edea;
+      --rotulo:    #96a49d;
+      --tenue:     #6d7a74;
+      --alerta:    #7fb0e6;
+      --alerta-df: rgba(127, 176, 230, 0.16);
+      --campana:   rgba(127, 176, 230, 0.06);
+    }
+  }
+  :root[data-theme="dark"] {
+    --muro: #0f1412; --pizarra: #161d1a; --hueco: #1e2623;
+    --borde: rgba(232,237,234,0.10); --borde-int: rgba(232,237,234,0.06);
+    --tinta: #e8edea; --rotulo: #96a49d; --tenue: #6d7a74;
+    --alerta: #7fb0e6; --alerta-df: rgba(127,176,230,0.16); --campana: rgba(127,176,230,0.06);
+  }
+  :root[data-theme="light"] {
+    --muro: #e9edea; --pizarra: #f7f9f7; --hueco: #dfe4e1;
+    --borde: rgba(20,26,24,0.11); --borde-int: rgba(20,26,24,0.07);
+    --tinta: #141a18; --rotulo: #56635e; --tenue: #8b968f;
+    --alerta: #1f4a7a; --alerta-df: rgba(31,74,122,0.12); --campana: rgba(31,74,122,0.05);
+  }
+
+  body {
+    background: var(--muro);
+    color: var(--tinta);
+    font-family: var(--prosa);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    padding: calc(var(--u) * 9) calc(var(--u) * 5) calc(var(--u) * 16);
+  }
+
+  .hoja { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column;
+          gap: calc(var(--u) * 14); }
+
+  /* ---- annotation layer: ABOUT the product, never part of it -------------- */
+  .nota { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.07em;
+          text-transform: uppercase; color: var(--tenue);
+          display: flex; flex-wrap: wrap; gap: calc(var(--u) * 2); align-items: baseline; }
+  .nota b { color: var(--rotulo); font-weight: 500; }
+  .nota--pie { text-transform: none; letter-spacing: 0; font-size: 12.5px;
+               line-height: 1.6; max-width: 62ch; display: block; }
+
+  .encabezado { display: flex; flex-direction: column; gap: calc(var(--u) * 3);
+                border-bottom: 1px solid var(--borde); padding-bottom: calc(var(--u) * 6); }
+  .encabezado h1 { font-family: var(--mono); font-size: 20px; font-weight: 600;
+                   letter-spacing: -0.01em; }
+  .encabezado p { color: var(--rotulo); max-width: 64ch; text-wrap: pretty; }
+
+  /* ---- the board --------------------------------------------------------- */
+  .pantalla { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
+
+  .tablero {
+    background: var(--pizarra);
+    border: 1px solid var(--borde);
+    border-radius: var(--r-medio);
+    overflow: hidden;
+  }
+
+  .barra {
+    display: flex; flex-wrap: wrap; gap: calc(var(--u) * 2) calc(var(--u) * 4);
+    align-items: baseline; justify-content: space-between;
+    padding: calc(var(--u) * 4) calc(var(--u) * 5);
+    border-bottom: 1px solid var(--borde-int);
+  }
+  .barra strong { font-size: 15px; font-weight: 600; }
+  .barra span { font-family: var(--mono); font-size: 12px; color: var(--tenue);
+                letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+
+  /* the focal block — one per screen, and it dominates by size + space */
+  .estado { padding: calc(var(--u) * 9) calc(var(--u) * 5) calc(var(--u) * 8);
+            display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
+  .estado__rotulo { font-family: var(--mono); font-size: 11.5px; font-weight: 500;
+                    letter-spacing: 0.14em; text-transform: uppercase; color: var(--tenue); }
+  .estado__titular { font-family: var(--mono); font-size: 40px; font-weight: 600;
+                     letter-spacing: -0.025em; line-height: 1.1; text-wrap: balance; }
+  .estado__glosa { color: var(--rotulo); max-width: 56ch; text-wrap: pretty; }
+  .estado--alerta .estado__titular { color: var(--alerta); }
+  .estado--alerta .estado__rotulo { color: var(--alerta); }
+
+  /* the horizon, rendered rather than described: origin -> target */
+  .horizonte { display: flex; align-items: center; gap: calc(var(--u) * 3);
+               font-family: var(--mono); font-size: 12.5px; color: var(--rotulo);
+               font-variant-numeric: tabular-nums; margin-top: calc(var(--u) * 2); }
+  .horizonte i { font-style: normal; color: var(--tenue); }
+  .horizonte em { font-style: normal; color: var(--tinta); font-weight: 600; }
+  .horizonte .tramo { flex: 0 0 44px; height: 1px; background: var(--borde);
+                      position: relative; }
+  .horizonte .tramo::after { content: ""; position: absolute; right: 0; top: -2px;
+                             width: 1px; height: 5px; background: var(--borde); }
+
+  /* ---- the signature: la cinta de la temporada ---------------------------- */
+  .cinta { padding: calc(var(--u) * 6) calc(var(--u) * 5) calc(var(--u) * 5);
+           border-top: 1px solid var(--borde-int); display: flex;
+           flex-direction: column; gap: calc(var(--u) * 3); }
+  .cinta__titulo { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.12em;
+                   text-transform: uppercase; color: var(--tenue);
+                   display: flex; justify-content: space-between; gap: calc(var(--u) * 4);
+                   flex-wrap: wrap; }
+  .cinta__pista { display: flex; gap: 2px; align-items: flex-end; min-height: 34px;
+                  overflow-x: auto; padding-bottom: 2px; }
+  .semana { flex: 1 1 0; min-width: 6px; height: 26px; border-radius: 1px;
+            background: var(--hueco); position: relative; }
+  .semana--revisada { background: var(--borde); }
+  .semana--campana::before { content: ""; position: absolute; inset: -6px 0 -5px;
+                             background: var(--campana); z-index: -1; }
+  .semana--alertada { background: var(--alerta); height: 34px; }
+  .semana--objetivo { background: var(--alerta); height: 34px;
+                      outline: 1px solid var(--alerta); outline-offset: 2px; }
+  .semana--objetivo-calma { background: var(--tinta); height: 34px; opacity: 0.35;
+                            outline: 1px solid var(--borde); outline-offset: 2px; }
+  .cinta__eje { display: flex; justify-content: space-between; font-family: var(--mono);
+                font-size: 10.5px; color: var(--tenue); letter-spacing: 0.04em;
+                font-variant-numeric: tabular-nums; }
+  .leyenda { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 4);
+             font-family: var(--mono); font-size: 11px; color: var(--tenue);
+             letter-spacing: 0.03em; }
+  .leyenda span { display: flex; align-items: center; gap: calc(var(--u) * 1.5); }
+  .llave { width: 8px; height: 10px; border-radius: 1px; background: var(--hueco); }
+  .llave--revisada { background: var(--borde); }
+  .llave--alertada { background: var(--alerta); }
+  .llave--campana { background: var(--campana); outline: 1px solid var(--borde-int); }
+
+  /* ---- fact row ---------------------------------------------------------- */
+  .hechos { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            border-top: 1px solid var(--borde-int); }
+  .hecho { padding: calc(var(--u) * 5); display: flex; flex-direction: column;
+           gap: calc(var(--u) * 1.5); border-left: 1px solid var(--borde-int); }
+  .hecho:first-child { border-left: 0; }
+  .hecho dt { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+              text-transform: uppercase; color: var(--tenue); }
+  .hecho dd { font-family: var(--mono); font-size: 19px; font-weight: 600;
+              letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .hecho small { color: var(--rotulo); font-family: var(--prosa); font-size: 12.5px;
+                 line-height: 1.45; text-wrap: pretty; }
+
+  /* ---- levers, only shown when there is something to act on -------------- */
+  .palancas { border-top: 1px solid var(--borde-int); padding: calc(var(--u) * 5);
+              display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
+  .palancas h3 { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.12em;
+                 text-transform: uppercase; color: var(--tenue); font-weight: 500; }
+  .palancas ol { display: flex; flex-direction: column; gap: calc(var(--u) * 2.5);
+                 list-style: none; }
+  .palancas li { display: flex; gap: calc(var(--u) * 3); align-items: baseline; }
+  .palancas li b { font-family: var(--mono); font-size: 12px; color: var(--alerta);
+                   font-weight: 600; flex: 0 0 auto; }
+  .palancas li span { color: var(--tinta); }
+  .palancas li i { font-style: normal; color: var(--tenue); }
+  .descartada { border-top: 1px dashed var(--borde-int); padding-top: calc(var(--u) * 3);
+                color: var(--tenue); font-size: 12.5px; max-width: 62ch;
+                text-wrap: pretty; }
+  .descartada b { color: var(--rotulo); font-weight: 600; }
+
+  /* ---- vigilance footer: the audit's answer to a silent season ----------- */
+  .vigilancia { border-top: 1px solid var(--borde-int); padding: calc(var(--u) * 4)
+                calc(var(--u) * 5); display: flex; flex-wrap: wrap;
+                gap: calc(var(--u) * 2) calc(var(--u) * 6); align-items: baseline;
+                justify-content: space-between; background: var(--muro); }
+  .vigilancia p { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.04em;
+                  color: var(--rotulo); font-variant-numeric: tabular-nums; }
+  .vigilancia p b { color: var(--tinta); font-weight: 600; }
+  .pulso { display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+           background: var(--rotulo); margin-right: 6px; vertical-align: 1px; }
+
+  a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--alerta); outline-offset: 2px; border-radius: var(--r-chico);
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important;
+                                                transition: none !important; } }
+  @media (max-width: 620px) {
+    body { padding: calc(var(--u) * 6) calc(var(--u) * 3) calc(var(--u) * 10); }
+    .estado__titular { font-size: 30px; }
+    .hecho { border-left: 0; border-top: 1px solid var(--borde-int); }
+    .hecho:first-child { border-top: 0; }
+  }
+</style>
+
+<div class="hoja">
+
+  <header class="encabezado">
+    <h1>VitalFlow · interfaz de alerta</h1>
+    <p>
+      Maqueta estática con datos de demostración. Dos pantallas, en el orden en que ocurren en
+      la realidad: la temporada en calma primero, porque es el estado dominante — 40% de los
+      servicios de urgencia hospitalaria pasan una temporada completa sin recibir una sola
+      alerta, y en el 72% de esos casos el silencio es correcto: no tuvieron ningún alza.
+    </p>
+    <p class="nota">
+      <b>Destinatario</b> Jefe de Urgencia · coordinador de turno
+      <b>Horizonte</b> 2 semanas desde la última semana cerrada
+      <b>Nunca muestra</b> probabilidades ni terceros decimales
+    </p>
+  </header>
+
+  <!-- ===================== SCREEN 1 — the primary state ==================== -->
+  <section class="pantalla">
+    <p class="nota">
+      Pantalla 1 · <b>estado primario</b> — 94% de las semanas-servicio, y temporadas enteras
+      en 40% de los servicios
+    </p>
+
+    <article class="tablero">
+      <div class="barra">
+        <strong>Hospital Claudio Vicuña · San Antonio</strong>
+        <span>UEH · REGIÓN DE VALPARAÍSO · COD 105100</span>
+      </div>
+
+      <div class="estado">
+        <p class="estado__rotulo">Semana 31 · del 27 de julio al 2 de agosto</p>
+        <h2 class="estado__titular">Sin alerta</h2>
+        <p class="estado__glosa">
+          La demanda respiratoria proyectada para esa semana queda dentro del rango habitual
+          de este servicio. No hay nada que activar.
+        </p>
+        <p class="horizonte">
+          <em>Semana 29</em><i>última cerrada</i>
+          <span class="tramo"></span>
+          <em>Semana 31</em><i>evaluada</i>
+        </p>
+      </div>
+
+      <div class="cinta">
+        <p class="cinta__titulo">
+          <span>Temporada 2026 · semana a semana</span>
+          <span>29 revisadas · 0 con alerta</span>
+        </p>
+        <div class="cinta__pista" role="img"
+             aria-label="Cinta de las 52 semanas epidemiológicas de 2026: 29 semanas revisadas sin ninguna alerta, semana 31 evaluada sin alerta, resto de la temporada aún no ocurre.">
+          <!-- weeks 1-29 watched; 22-35 inside the winter campaign; 31 evaluated, calm -->
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--campana"></div>
+          <div class="semana semana--objetivo-calma semana--campana"></div>
+          <div class="semana semana--campana"></div><div class="semana semana--campana"></div>
+          <div class="semana semana--campana"></div><div class="semana semana--campana"></div>
+          <div class="semana"></div><div class="semana"></div><div class="semana"></div>
+          <div class="semana"></div><div class="semana"></div><div class="semana"></div>
+          <div class="semana"></div><div class="semana"></div><div class="semana"></div>
+          <div class="semana"></div><div class="semana"></div><div class="semana"></div>
+          <div class="semana"></div><div class="semana"></div><div class="semana"></div>
+          <div class="semana"></div><div class="semana"></div>
+        </div>
+        <p class="cinta__eje"><span>SEM 1</span><span>SEM 13</span><span>SEM 26</span>
+          <span>SEM 39</span><span>SEM 52</span></p>
+        <p class="leyenda">
+          <span><i class="llave llave--revisada"></i>revisada, sin alza</span>
+          <span><i class="llave llave--alertada"></i>con alerta</span>
+          <span><i class="llave"></i>aún no ocurre</span>
+          <span><i class="llave llave--campana"></i>campaña de invierno</span>
+        </p>
+      </div>
+
+      <dl class="hechos">
+        <div class="hecho">
+          <dt>Posición de la semana</dt>
+          <dd>19ª de 29</dd>
+          <small>Entre las semanas de esta temporada, ordenadas por demanda esperada en
+            este servicio.</small>
+        </div>
+        <div class="hecho">
+          <dt>Umbral del servicio</dt>
+          <dd>168 at/sem</dd>
+          <small>Percentil 90 de las semanas históricas de este servicio. Es su propia vara,
+            no la de otro hospital.</small>
+        </div>
+        <div class="hecho">
+          <dt>Última alerta</dt>
+          <dd>Sem 27 · 2025</dd>
+          <small>Este servicio recibió 2 alertas en 2025 y ninguna en lo que va de 2026.</small>
+        </div>
+      </dl>
+
+      <div class="vigilancia">
+        <p><i class="pulso"></i>Vigilancia activa · <b>29</b> semanas revisadas esta temporada</p>
+        <p>Datos DEIS al 26 jul 2026 · semana 29 cerrada</p>
+      </div>
+    </article>
+
+    <p class="nota nota--pie">
+      Por qué esta pantalla existe: un coordinador que no recibe alertas en 29 semanas no tiene
+      cómo distinguir «sin riesgo» de «el sistema dejó de funcionar». La cinta y el pie de
+      vigilancia responden esa pregunta sin que nadie la haga. El silencio se muestra como
+      cobertura acumulada, no como ausencia de contenido.
+    </p>
+  </section>
+
+  <!-- ===================== SCREEN 2 — the alert state ====================== -->
+  <section class="pantalla">
+    <p class="nota">
+      Pantalla 2 · <b>estado de alerta</b> — 6% de las semanas-servicio
+    </p>
+
+    <article class="tablero">
+      <div class="barra">
+        <strong>Hospital Claudio Vicuña · San Antonio</strong>
+        <span>UEH · REGIÓN DE VALPARAÍSO · COD 105100</span>
+      </div>
+
+      <div class="estado estado--alerta">
+        <p class="estado__rotulo">Semana 33 · del 10 al 16 de agosto</p>
+        <h2 class="estado__titular">Alza probable</h2>
+        <p class="estado__glosa">
+          Esa semana quedaría entre las más altas de la temporada para este servicio, por
+          encima de su umbral histórico. Es la semana de mayor demanda esperada de las
+          próximas dos.
+        </p>
+        <p class="horizonte">
+          <em>Semana 31</em><i>última cerrada</i>
+          <span class="tramo"></span>
+          <em>Semana 33</em><i>evaluada</i>
+        </p>
+      </div>
+
+      <div class="cinta">
+        <p class="cinta__titulo">
+          <span>Temporada 2026 · semana a semana</span>
+          <span>31 revisadas · 1 con alerta</span>
+        </p>
+        <div class="cinta__pista" role="img"
+             aria-label="Cinta de las 52 semanas epidemiológicas de 2026: 31 semanas revisadas, semana 33 marcada con alerta dentro de la campaña de invierno.">
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div><div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--revisada semana--campana"></div>
+          <div class="semana semana--campana"></div>
+          <div class="semana semana--objetivo semana--campana"></div>
+          <div class="semana semana--campana"></div><div class="semana semana--campana"></div>
+          <div class="semana"></div><div class="semana"></div><div class="semana"></div>
+          <div class="semana"></div><div class="semana"></div><div class="semana"></div>
+          <div class="semana"></div><div class="semana"></div><div class="semana"></div>
+          <div class="semana"></div><div class="semana"></div><div class="semana"></div>
+          <div class="semana"></div><div class="semana"></div><div class="semana"></div>
+          <div class="semana"></div><div class="semana"></div>
+        </div>
+        <p class="cinta__eje"><span>SEM 1</span><span>SEM 13</span><span>SEM 26</span>
+          <span>SEM 39</span><span>SEM 52</span></p>
+        <p class="leyenda">
+          <span><i class="llave llave--revisada"></i>revisada, sin alza</span>
+          <span><i class="llave llave--alertada"></i>con alerta</span>
+          <span><i class="llave"></i>aún no ocurre</span>
+          <span><i class="llave llave--campana"></i>campaña de invierno</span>
+        </p>
+      </div>
+
+      <dl class="hechos">
+        <div class="hecho">
+          <dt>Posición de la semana</dt>
+          <dd>2ª de 31</dd>
+          <small>Entre las semanas de esta temporada, ordenadas por demanda esperada en
+            este servicio.</small>
+        </div>
+        <div class="hecho">
+          <dt>Umbral del servicio</dt>
+          <dd>168 at/sem</dd>
+          <small>Percentil 90 de las semanas históricas de este servicio. Es su propia vara,
+            no la de otro hospital.</small>
+        </div>
+        <div class="hecho">
+          <dt>Presupuesto</dt>
+          <dd>Campaña abierta</dd>
+          <small>La semana 33 cae dentro de la Campaña de Invierno decretada: el turno extra
+            se puede pagar.</small>
+        </div>
+      </dl>
+
+      <div class="palancas">
+        <h3>Qué se puede mover a tiempo</h3>
+        <ol>
+          <li><b>01</b><span>Activar el plan de contingencia de camas.</span></li>
+          <li><b>02</b><span>Reasignar funciones internas del servicio.</span></li>
+          <li><b>03</b><span>Autorizar turnos espejo <i>— con cargo al presupuesto de
+            campaña</i>.</span></li>
+        </ol>
+        <p class="descartada">
+          <b>La dotación base no está en esta lista, y no es un olvido.</b> El rol mensual
+          cierra entre el 20 y el 25 del mes anterior, así que la contratación de refuerzo
+          necesita entre 4 y 7 semanas de aviso. Este aviso llega con 2. Los calendarios no
+          se cruzan y ningún modelo lo arregla.
+        </p>
+      </div>
+
+      <div class="vigilancia">
+        <p><i class="pulso"></i>Vigilancia activa · <b>31</b> semanas revisadas esta temporada</p>
+        <p>Datos DEIS al 9 ago 2026 · semana 31 cerrada</p>
+      </div>
+    </article>
+
+    <p class="nota nota--pie">
+      La alerta no dice un número de riesgo: dice una posición dentro de las propias semanas
+      del servicio. La calibración de probabilidades se midió y se rechazó — la tasa base de
+      alzas se mueve entre temporadas y eso es justamente lo que el modelo intenta pronosticar,
+      así que un «73%» sería una cifra sin respaldo. Un ordinal sí lo tiene.
+    </p>
+  </section>
+
+</div>
