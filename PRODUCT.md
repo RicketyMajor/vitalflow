@@ -40,6 +40,21 @@ its baseline is not "no model", it is the **seasonal calendar** (a facility × w
 a **zero-parameter persistence rule**, and it reports the horizon it can actually serve rather than
 the one that scores better.
 
+**Built entirely from public data, deliberately (2026-08-03).** Every number is reproducible by a
+stranger with a browser and no institutional access, and **no result depends on a specialist
+consultation** — the two questions previously held open for a physician were closed without one
+(`IdCausa = 34` by the official REM manual; the paediatric question reclassified as a product
+decision settled by pre-registration). The constraint is a feature: it makes the whole project
+auditable, and it sets a floor a partner's finer data can only improve on.
+
+**The limitation is granularity, not recency, and the difference matters.** The primary target is
+published weekly through CKAN with **zero lag** — anyone who calls this project's data old can check
+in thirty seconds and be wrong. What the public file lacks is resolution: weekly rather than daily,
+facility-aggregate rather than patient-level, five age bands rather than age, no triage category, no
+waiting time, no bed census. **`docs/data-upgrade-ladder.md`** states what each of those would
+unlock, with measured figures — and, as the part that makes it credible, what this project already
+measured that more data will *not* fix.
+
 ## Operating Context
 
 - **Data:** DEIS weekly emergency attentions, 2014–2026, `IdCausa = 2` (respiratory). A DEIS week is
@@ -49,7 +64,9 @@ the one that scores better.
 - **Delivery:** a static, read-only web artifact over exported JSON. No backend, no API, no database
   — that design was considered and deleted as heavier than a CPU model refreshed weekly.
 - **Calendar:** the declared Campaña de Invierno spans epidemiological weeks 22–35 and is what makes
-  a mirror shift payable. The monthly roster closes on the 20th–25th of the preceding month.
+  a mirror shift payable. The monthly roster closes on the 20th–25th of the preceding month —
+  ⚠ **from the 2026-07-29 physician scoping; no public source has been located for this rule**
+  (flagged 2026-08-03). It is load-bearing: it is why base staffing is not a lever.
 
 ## Capabilities and Constraints
 
@@ -64,8 +81,17 @@ the one that scores better.
 - **94% of facility-weeks carry no alert** and ~40% of facilities receive none across a whole season;
   for most of them that silence is correct. The calm state is the product's primary state.
 - **Undecided, and not to be invented:** whether the product should forecast *paediatric* respiratory
-  demand (the target is all-ages; the strain it predicts is paediatric); what `IdCausa = 34` ("TOTAL
-  DEMANDA") is. Both are open questions for a physician.
+  demand — the target is all-ages and the strain it predicts is paediatric. **This is a product
+  decision, not a clinical question** (reclassified 2026-08-03): the age bands are already in the
+  loader, which makes it easy and therefore premature. It must be pre-registered and measured, not
+  built speculatively.
+- **Settled 2026-08-03, previously listed here as open:** `IdCausa = 34` ("TOTAL DEMANDA") is defined
+  in the official [Manual Series REM 2025-2026 Serie A](https://repositoriodeis.minsal.cl/ContenidoSitioWeb2020/REM/2025/SERIE/Manual%20Series%20REM%202025%20-2026%20SERIE%20A%20-BS-BM-%20DV1.2.pdf)
+  §A.1 as everyone who generated a DAU **including those who abandoned before discharge**, so
+  `demanda − atenciones = walkouts`. **Consequence for the target:** an attention requires an *alta
+  del proceso*, which a walkout never receives — so the target **excludes** walkouts and is
+  therefore **biased low**, not contaminated. Every recall figure stands as measured. This corrects
+  the 2026-07-29 conclusion that walkouts were counted.
 
 ## Brand Commitments
 
@@ -94,10 +120,19 @@ rounded up, and the horizon must be named every time it is quoted.**
   facility's own bed-occupancy norm for that month, negative-control wards flat. **The responding
   wards are paediatric; adult wards are a precise null** — replicated exploratory, never
   pre-registered, and it must be labelled so every time.
-- **Absences future work must not fabricate:** no capacity denominator for the 446 ambulatory
-  facilities (73.7% of volume) — formally untestable, not merely untested; no weekly percentage-point
-  strain figure (the measurement is monthly and converting it is an assumption); no clinical outcome
-  data; **no user research** — the interface has had zero conversations with a Jefe de Urgencia.
+- **The ambulatory 74%: tested 2026-08-03 and not found.** ~~Formally untestable, not merely
+  untested~~ — that claim is **withdrawn**. A demand-side strain measure does exist for SAPU/SAR/SUR
+  (`demanda − atenciones`), it was pre-registered and run, and it **did not pass**: the abandonment
+  *rate* in surge weeks is **−0.049 SD**, CI [−0.107, −0.018] — significant in the direction opposite
+  to the prediction. The audit shows this is a denominator effect (all-cause demand rises +0.34 SD
+  while walkout counts do not move), and that the walkout count *does* rise at **hospitals**
+  (+0.06, CI [+0.008, +0.122]) — **exploratory, never pre-registered, and no era replication is
+  possible** because the field does not exist before 2020. `specs/abandonment-construct-validity.md`.
+- **Absences future work must not fabricate:** no *capacity* denominator for the ambulatory
+  facilities (73.7% of volume) — they hold no beds and appear in no bed report; no weekly
+  percentage-point strain figure (the measurement is monthly and converting it is an assumption); no
+  clinical outcome data; **no user research** — the interface has had zero conversations with a Jefe
+  de Urgencia, and no data upgrade supplies one.
 
 ## Product Principles
 

@@ -98,9 +98,36 @@ envelope. See §9.3.*
 > 0.055 against 0.070.)
 
 **What this does not establish.** The holdout validates the *pipeline* — the ranking transfers to an
-unseen season. It says nothing about whether a week above a facility's own p90 coincides with
-measurable *strain*, which needs a capacity denominator the open data does not contain for most
-facilities. That question is open.
+unseen season. Whether a week above a facility's own p90 coincides with measurable *strain* is a
+separate question, and it has since been tested twice, with two different answers:
+
+- **Hospital ERs — yes, modestly.** A month containing a p90 respiratory week sits **+0.060 SD**
+  above that facility's own bed-occupancy norm for that month of year (2022–2026; +0.092 SD for
+  2015–2019), with obstetric and psychiatric control wards flat. **The responding wards are
+  paediatric; adult wards are a precise null** — replicated exploratory, never pre-registered.
+  `context/specs/rem20-construct-validity.md`.
+- **Ambulatory facilities (73.7% of volume) — tested and not found.** They hold no beds, but they do
+  report abandonments (`TOTAL DEMANDA − TOTAL ATENCIONES`). Pre-registered and run 2026-08-03: the
+  abandonment rate in surge weeks is **−0.049 SD**, CI [−0.107, −0.018] — significant *opposite* to
+  the prediction. **NOT PASSED.** `context/specs/abandonment-construct-validity.md`.
+
+## Built on public data, on purpose
+
+Every figure above is reproducible from data anyone can download, and **no result depends on a
+specialist consultation**. The primary target is published weekly through CKAN with **zero lag** —
+the constraint is not that the data is old, it is that it is **coarse**: weekly rather than daily,
+facility-aggregate rather than patient-level, five age bands rather than age, no triage category, no
+bed census.
+
+That is the point. A partner supplying finer data gets a measurably better product, and
+**[`docs/data-upgrade-ladder.md`](docs/data-upgrade-ladder.md)** says exactly how much — beginning
+with the largest gain, which is not a modelling change at all: a facility reading its own encounter
+feed does not have the settling delay that forces this deployment to h=2, and **h=1 is where the
+margin over the seasonal calendar is several times larger**.
+
+The same document lists what this project already measured that **more data will not fix**: the
+three-week horizon wall, pollution, virological surveillance, spatial features, a bigger model class
+and calibrated probabilities. A ladder that only promises is a wishlist.
 
 ## What the data says
 
@@ -125,9 +152,10 @@ The measurements dictate a small model, not a large one:
 3. **Alert list** — `HistGradientBoostingClassifier` emitting P(surge) per facility-week, ranked to
    fill a fixed alert budget.
 
-**Stack:** DuckDB + Parquet for data, scikit-learn for modelling, a weekly batch job for serving.
-No GPU. A Temporal Fusion Transformer and HDBSCAN clustering were the original plan and were dropped
-once the structure they assumed was measured and found absent — see `context/decisions/log.md`.
+**Stack:** DuckDB + Parquet for data, scikit-learn for modelling, a batch job writing an alert list,
+static JSON, and Vite + React + TypeScript reading it. **No GPU, no API, no database.** A Temporal
+Fusion Transformer and HDBSCAN clustering were the original plan and were dropped once the structure
+they assumed was measured and found absent — see `context/decisions/log.md`.
 
 ## Project Structure
 
@@ -135,7 +163,12 @@ once the structure they assumed was measured and found absent — see `context/d
 * `notebooks/` — exploration, the statistical audit, and the four analyses that set the scope.
 * `src/` — canonical loaders (`make_dataset.py`, `build_features.py`) and models. Each module runs a
   self-check when executed directly.
-* `services/`, `frontend/` — scaffolded, not yet implemented.
+* `frontend/` — the explorer: Vite + React + TypeScript over static JSON. Any of the 180 hospital
+  ERs, its season, its alerts and what actually happened, plus `#/evidencia`. No backend, no chart
+  library, no router, no state library.
+* `PRODUCT.md` — product truth: users, purpose, constraints, the evidence on hand and the absences
+  future work must not fabricate. The visual system lives in `frontend/src/styles.css`.
+* `services/` — scaffolded, not implemented. There is no API and the design does not need one.
 * `docs/vitalflow-project.md` — the full project definition: problem, data, hazards, model design.
 * `context/` — working memory: specs, decision log, session handoffs.
 
@@ -150,3 +183,20 @@ python src/features/build_features.py            # self-check on the weekly pane
 
 The datasets are not distributed with the repository; `context/sources/index.md` lists every source,
 its path and how to refresh it.
+
+### The explorer
+
+```bash
+python src/models/export_frontend.py             # writes frontend/public/data/ -- REQUIRED FIRST
+cd frontend && npm install
+npm run dev                                      # http://localhost:5173/
+```
+
+**`export_frontend.py` has to run before the app shows anything**: the 180 per-facility JSON files
+are generated from local data and are gitignored, so a fresh clone has an index and no facilities.
+`npm run check` runs the season arithmetic; `npm run build` type-checks and builds a static bundle
+that deploys anywhere.
+
+Four facilities are the acceptance tests rather than a demo — `#/103100` a season with no alerts and
+no surges, `#/200717` six of ten caught, `#/129103` three surges and no warning, `#/105107` a season
+scored on 37 non-contiguous weeks.
