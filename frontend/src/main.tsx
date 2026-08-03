@@ -9,6 +9,7 @@ import type { Facility as F, Index } from "./data";
 import { Evidence } from "./Evidence";
 import { Explorer } from "./Explorer";
 import { Facility } from "./Facility";
+import { freshness } from "./season";
 import "./styles.css";
 
 function useHash() {
@@ -37,6 +38,10 @@ function useAsync<T>(fn: () => Promise<T>, key: string) {
 function App() {
   const path = useHash().replace(/^\//, "");
   const evidencia = path === "evidencia";
+  // Shares the promise `ExplorerRoute` uses — `data.ts` caches by path, so this costs no fetch on
+  // `#/` and one cached 39 KB index elsewhere. The stamp belongs on every route: a stale reading is
+  // not less stale for having been reached through a facility link.
+  const { data: index } = useAsync<Index>(loadIndex, "index");
 
   return (
     <div className="hoja">
@@ -46,6 +51,7 @@ function App() {
           Demanda respiratoria semanal en las 180 urgencias hospitalarias del país, contra el propio
           umbral de cada servicio. Se puede ver al modelo acertar y se puede ver fallar.
         </p>
+        {index && <Sello index={index} />}
         <nav>
           <a href="#/" aria-current={path ? undefined : "page"}>Todos los servicios</a>
           <a href="#/evidencia" aria-current={evidencia ? "page" : undefined}>Evidencia</a>
@@ -54,6 +60,24 @@ function App() {
 
       {evidencia ? <Evidence /> : path ? <FacilityRoute code={path} /> : <ExplorerRoute />}
     </div>
+  );
+}
+
+/* AC-I9 — the trust mechanism the silent-facility audit asked for. A calm screen and a dead
+   pipeline look identical, and until this line existed nothing on screen could tell them apart.
+   No accent: the institutional blue means "the model spoke", and staleness is not a model output. */
+function Sello({ index }: { index: Index }) {
+  const [anio, semana] = index.settled_through;
+  const { dias, viejo } = freshness(index.stamp);
+  return (
+    <p className={viejo ? "nota sello sello--viejo" : "nota sello"}>
+      {/* "Fuente DEIS", not "datos": the served season is 2025 while the snapshot reaches 2026,
+          and a line that omitted the source would contradict the season the screen is showing. */}
+      Fuente DEIS hasta la <b>semana {semana} de {anio}</b>, la última cerrada ·{" "}
+      {viejo
+        ? <b>sin actualizar hace {dias} días, el refresco semanal no se ha ejecutado</b>
+        : <>actualizado {dias === 0 ? "hoy" : `hace ${dias} ${dias === 1 ? "día" : "días"}`}</>}
+    </p>
   );
 }
 

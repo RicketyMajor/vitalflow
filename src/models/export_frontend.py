@@ -21,6 +21,7 @@ week** — that is the entire point of a forecast. AC-E7 requires the interface 
 
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -28,6 +29,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
+from src.data.refresh import RELEASE  # noqa: E402
 from src.models.train_model import (  # noqa: E402
     ALERT_LIST, BASELINE_TRAIN_FROM, SURGE_QUANTILE, Y,
     hospital_er_facilities, load_panel, train_years_for,
@@ -50,6 +52,23 @@ def surge_thresholds(panel, season):
     seasons = train_years_for(panel, season, since=BASELINE_TRAIN_FROM)
     rank_rows = panel[panel["Anio"].isin(seasons)]
     return rank_rows.groupby("EstablecimientoCodigo")[Y].quantile(SURGE_QUANTILE)
+
+
+def release_stamp(panel):
+    """AC-I9: which week is being served, and when this export was produced.
+
+    `settled_through` is the load-bearing half. It is read off the panel that was actually
+    exported, so it cannot claim to be fresher than the data -- and if the refresh job stops it
+    freezes, which is exactly the signal a coordinator needs to tell "no risk" from "the pipeline
+    died". `published` is DEIS's own date and is absent when the parquet was placed on disk by
+    hand; `stamp` is this run, and it is what visibly ages on screen.
+    """
+    year = int(panel["Anio"].max())
+    week = int(panel.loc[panel["Anio"] == year, "SemanaEstadistica"].max())
+    published = json.loads(RELEASE.read_text(encoding="utf-8")).get("published") \
+        if RELEASE.exists() else None
+    return {"stamp": date.today().isoformat(), "settled_through": [year, week],
+            "published": published}
 
 
 def build(path=ALERT_LIST):
@@ -100,7 +119,8 @@ def build(path=ALERT_LIST):
             "surges": int(h2["observed_surge"].sum()),
         })
 
-    return {"season": season, "retrospective": True, "facilities": index}, payloads
+    return ({"season": season, "retrospective": True, **release_stamp(panel),
+             "facilities": index}, payloads)
 
 
 def _int_or_none(v):
@@ -135,6 +155,8 @@ def demo(out=OUT):
     codes = set(alerts["facility"].unique())
 
     assert {f["code"] for f in index["facilities"]} == codes, "index and parquet disagree on facilities"
+    # AC-I9: nothing on screen can go silently stale. The screen reads these three and nothing else.
+    assert index["stamp"] and index["settled_through"], "the export carries no AC-I9 stamp"
     # AC-E6: first paint loads the index only, so the index must carry no per-week data.
     assert not any(isinstance(v, list) for f in index["facilities"] for v in f.values()), \
         "the index carries a series -- first paint would load every facility's weeks"

@@ -610,16 +610,27 @@ vitalflow/
 │   └── 04_tft_model_baseline.ipynb            # empty — not the plan any more
 ├── src/
 │   ├── data/make_dataset.py        # canonical target + virology loaders, self-check
-│   ├── features/build_features.py  # weekly panel, geodesics, deseasonalization, self-check
+│   ├── data/refresh.py             # the weekly refresh job (AC-I9): pull the DEIS release from
+│   │                               # CKAN, validate in a temp file, install only if it passes AND
+│   │                               # differs, re-export, stamp what is served. Run from cron or a
+│   │                               # CI workflow — NOT a service. `--check` runs its guards offline
+│   ├── features/build_features.py  # weekly panel, geodesics, deseasonalization, self-check.
+│   │                               # Owns the short-week refusal: drop_unsettled_tail
 │   ├── models/train_model.py        # the whole model: three stages, ablation, alert list
 │   └── models/predict_model.py      # empty — write_alert_list covers serving for now
-├── services/                       # scaffolded, empty
-├── frontend/                       # scaffolded, empty
+│   └── analysis/                    # rem20_ and abandonment_construct_validity.py — the two
+│                                    # construct-validity tests, each pre-registered before it ran
+├── frontend/                       # the explorer — built and running (2026-08-02), 7 source files
 ├── docs/vitalflow-project.md       # this file
+├── docs/data-upgrade-ladder.md     # what finer data would unlock, and what it would NOT fix
 ├── context/                        # working memory: specs, decisions, handoffs (gitignored)
-├── docker-compose.yml              # empty
-├── requirements.txt
+├── requirements.txt                # scikit-learn was MISSING until 2026-08-03 — a clone could
+│                                   # install everything declared and still not run the model
 └── README.md
+
+Deleted 2026-08-04: `services/` (three empty dirs git never tracked) and `docker-compose.yml`
+(0 bytes, tracked). Residue of the Redis + FastAPI + Node design rejected 2026-07-27. The weekly
+refresh is a scheduled batch, not a reason to bring them back.
 ```
 
 ## 11. Immediate Next Steps
@@ -688,11 +699,26 @@ definition.
    *Three things this does not license:* a magnitude claim (half a percentage point of occupancy is
    small), converting the monthly effect into a weekly one (it is a **lower bound**, and the
    arithmetic is an assumption), and **anything about the 446 ambulatory facilities carrying 73.7% of
-   volume** — 0 of them appear in any bed report and none is testable with data on disk.
-   **`IdCausa = 34` ("TOTAL DEMANDA") is still open** and is the parallel lead: an unexamined
-   daily-file row running 8.5% above total attentions, which — if it is unmet demand — is the capacity
-   denominator this project has never held, and the only one that would exist for ambulatory
-   facilities. It needs one question to a physician.
+   volume** — 0 of them appear in any bed report. ~~and none is testable with data on disk~~ —
+   **withdrawn 2026-08-03: they were testable by another route, and were tested. See 6b.**
+6b. ✅ **The ambulatory half — tested 2026-08-03 and NOT FOUND.** ~~`IdCausa = 34` needs one question
+   to a physician~~ — **it needed one public PDF.** The
+   [Manual Series REM 2025-2026 Serie A](https://repositoriodeis.minsal.cl/ContenidoSitioWeb2020/REM/2025/SERIE/Manual%20Series%20REM%202025%20-2026%20SERIE%20A%20-BS-BM-%20DV1.2.pdf)
+   §A.1 defines *demanda* as everyone who generated a DAU **including those who abandoned before
+   discharge**, and §A.2 confirms SAPU/SAR report it too. So `demanda − atenciones = walkouts` — a
+   **demand-side** strain measure (not a capacity denominator) that does reach ambulatory facilities.
+   Pre-registered, run once: **NOT PASSED.** Ambulatory contrast **−0.049 SD, CI [−0.107, −0.018]**,
+   significant *opposite* to the prediction; both placebos flat.
+   **Two things outrank the verdict.** (a) **No replication is possible, ever** — `IdCausa = 34` is
+   reported by zero facilities in 2017–2019 and phases in during 2020. (b) **The negative is a
+   denominator effect**: walkout counts do not move at ambulatory facilities (+0.020, CI spanning 0)
+   while all-cause demand rises **+0.342 SD**; at hospitals the count *does* rise (**+0.06**, CI
+   [+0.008, +0.122]) — *exploratory, never pre-registered, and not to be quoted as a result.*
+   **It also corrected §9 item 6's premise:** an *atención* requires an *alta del proceso*, which a
+   walkout never receives, so **the target excludes walkouts and is biased LOW, not contaminated.**
+   Every recall figure in this document stands as measured.
+   **Dead lead closed:** `IdCausa` 27/28 (boarding, "pacientes en espera de hospitalización") exist
+   in the schema and are **identically zero for all 358 facilities in 2024**.
 7. **Automate the weekly refresh and build the interface**, once 2–4 have settled what is served.
    The refresh must assert tail completeness — refuse to serve on a short week.
 8. **Re-check the ablation** when a third holdout year exists. The conclusion that the national

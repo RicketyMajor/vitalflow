@@ -168,7 +168,10 @@ they assumed was measured and found absent — see `context/decisions/log.md`.
   library, no router, no state library.
 * `PRODUCT.md` — product truth: users, purpose, constraints, the evidence on hand and the absences
   future work must not fabricate. The visual system lives in `frontend/src/styles.css`.
-* `services/` — scaffolded, not implemented. There is no API and the design does not need one.
+* `src/data/refresh.py` — the weekly refresh job: pull the DEIS release from CKAN, validate it,
+  install it only if it passes and differs, re-export, and stamp which week is being served. Run it
+  from cron, Task Scheduler or a CI workflow — there is no API and the design does not need one.
+  `python src/data/refresh.py --check` runs its guards offline in about two seconds.
 * `docs/vitalflow-project.md` — the full project definition: problem, data, hazards, model design.
 * `context/` — working memory: specs, decision log, session handoffs.
 

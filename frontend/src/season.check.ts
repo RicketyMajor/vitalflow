@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import type { Facility } from "./data.ts";
-import { axisWeeks, runs, seasonLength, summarize, verdict } from "./season.ts";
+import { axisWeeks, freshness, runs, seasonLength, summarize, verdict } from "./season.ts";
 
 // 105107's real shape: 37 scored weeks scattered between week 1 and week 49.
 const sparse = [1, 2, 3, 20, 21, 49];
@@ -49,4 +49,15 @@ assert.match(verdict(hit)[0], /^1 de 1 alzas avisadas/);
 // The peak is a row index into the facility's own arrays, not a week number.
 assert.equal(summarize(facility([5, 9], [10, 99], [0, 0], [0, 0])).peak, 1);
 
-console.log("OK  season.ts: week-space runs, axis, summary and verdict");
+// AC-I9: the stamp has to age. The failure that matters is the silent one — a job that stopped
+// weeks ago still reading as current, which is a calm screen the reader cannot distinguish from
+// a dead pipeline.
+const day = (n: number) => new Date(Date.parse("2026-08-03T00:00:00") + n * 86_400_000);
+assert.deepEqual(freshness("2026-08-03", day(0)), { dias: 0, viejo: false }, "today is fresh");
+assert.deepEqual(freshness("2026-08-03", day(8)), { dias: 8, viejo: false }, "one weekly cycle");
+assert.deepEqual(freshness("2026-08-03", day(9)), { dias: 9, viejo: true },
+  "a missed refresh must be visible on the ninth day, not merely dated");
+assert.deepEqual(freshness("2026-08-03", day(-2)), { dias: 0, viejo: false },
+  "a stamp in the future is a clock disagreement, never negative age");
+
+console.log("OK  season.ts: week-space runs, axis, summary, verdict and the AC-I9 stamp");

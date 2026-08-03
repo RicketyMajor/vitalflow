@@ -71,8 +71,12 @@ FEATURES = ["er", "er_l1", "er_l2", "er_l4", "er_d4"]
 
 
 def load_panel():
-    """The weekly facility panel with a continuous week index `t`, COVID years removed."""
-    p = load_weekly_target(BASE_YEAR, 2026)
+    """The weekly facility panel with a continuous week index `t`, COVID years removed.
+
+    No upper year bound: it was pinned at 2026 while 2026 was the newest year on disk, and the
+    weekly refresh job would have silently dropped every 2027 week the first time it ran.
+    """
+    p = load_weekly_target(BASE_YEAR)
     p = p[~p["Anio"].isin(COVID_YEARS)].copy()
     p["t"] = (p["Anio"] - BASE_YEAR) * 52 + p["SemanaEstadistica"] - 1
     return p

@@ -15,7 +15,17 @@ export type Meta = {
 
 export type IndexRow = Meta & { weeks: number; alerts: number; surges: number };
 
-export type Index = { season: number; retrospective: boolean; facilities: IndexRow[] };
+export type Index = {
+  season: number;
+  retrospective: boolean;
+  /** AC-I9, written by `release_stamp`. `settled_through` is read off the exported panel so it
+      cannot claim to be fresher than the data; `stamp` is when the export ran and is what ages if
+      the weekly refresh job stops; `published` is DEIS's own date, absent unless `refresh.py` ran. */
+  stamp: string;
+  settled_through: [number, number];
+  published: string | null;
+  facilities: IndexRow[];
+};
 
 export type Facility = Meta & {
   season: number;

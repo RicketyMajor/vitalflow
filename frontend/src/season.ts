@@ -7,6 +7,17 @@ import type { Facility } from "./data";
 
 export const CAMPAIGN: [number, number] = [22, 35];   // Campaña de Invierno, as declared
 
+/** DEIS publishes weekly, so one missed refresh is visible on the ninth day. */
+export const DIAS_FRESCO = 8;
+
+/** AC-I9. How old the served export is, and whether that is old enough to say so out loud.
+ *  A future stamp is a clock disagreement, never freshness — clamped at 0 rather than negative. */
+export function freshness(stamp: string, today = new Date()) {
+  const dias = Math.max(0, Math.floor(
+    (today.getTime() - Date.parse(`${stamp}T00:00:00`)) / 86_400_000));
+  return { dias, viejo: dias > DIAS_FRESCO };
+}
+
 /** The season's full width in weeks: 52, or more if the year carries a week 53. */
 export const seasonLength = (weeks: number[]) => Math.max(52, ...weeks);
 

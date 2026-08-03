@@ -89,6 +89,13 @@ a:focus-visible, [tabindex]:focus-visible, input:focus-visible, button:focus-vis
 .encabezado h1 { font-family: var(--mono); font-size: 20px; font-weight: 600;
                  letter-spacing: -0.01em; }
 .encabezado p { color: var(--rotulo); max-width: 64ch; text-wrap: pretty; }
+/* AC-I9. One line, `·` separated like every other pairing on the board — a border divider read as
+   a stray tick once the line wrapped. Staleness is ink, never the accent: see the note in main.tsx,
+   the institutional blue means "the model spoke" and a dead pipeline is not a model output. */
+.sello { display: block; line-height: 1.7; }
+.sello--viejo { color: var(--rotulo); }
+.sello--viejo b { color: var(--tinta); font-weight: 600; }
+
 .encabezado nav { display: flex; gap: calc(var(--u) * 4); font-family: var(--mono);
                   font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
 .encabezado nav a { color: var(--tenue); text-decoration: none; }
