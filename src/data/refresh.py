@@ -28,6 +28,7 @@ from datetime import date
 from pathlib import Path
 
 import duckdb
+import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -114,16 +115,29 @@ def install(candidate, dest):
     candidate.replace(dest)
 
 
-def rebuild():
+def served_season(default):
+    """The season `alert_list.parquet` is currently built for, or `default` if there is none."""
+    from src.models.train_model import ALERT_LIST
+    if not ALERT_LIST.exists():
+        return default
+    return int(pd.read_parquet(ALERT_LIST, columns=["year"])["year"].iloc[0])
+
+
+def rebuild(season=None):
     """Re-run the alert list and the static export over whatever is now on disk.
 
-    Imported here rather than at module scope: `--check` must run without loading the model.
+    **`season` defaults to the one already being served, not to the newest year in the panel.**
+    Refreshing data must not decide which season is on screen: rolling the explorer from a finished
+    2025 to a partial 2026 changes what the product *is*, and that belongs to the live-screen work
+    (`alert-interface.md` AC-I7/I8), not to a side effect of a download. Pass a season to roll it.
+
+    Imported inside the function rather than at module scope: `--check` must run without the model.
     """
     from src.models.export_frontend import export
     from src.models.train_model import load_panel, write_alert_list
 
     panel = load_panel()                      # trims the unsettled tail -- the short-week refusal
-    season = int(panel["Anio"].max())
+    season = season or served_season(int(panel["Anio"].max()))
     _, path = write_alert_list(panel, season)
     print(f"OK  alert list -> {path.name}, season {season}")
     return export()
