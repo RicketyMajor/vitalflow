@@ -206,6 +206,62 @@ def report(con=None):
               f"{'PASS' if p['ci'][0] > 0 and p['median'] > c['median'] else 'NOT PASSED'}")
 
 
+def audit(years=PRIMARY_WINDOW, con=None):
+    """Adversarial checks on the primary result. Each one can weaken or overturn it.
+
+    Run 2026-08-01, after the result was published to the decision log. None of these were
+    pre-registered -- they are a hostile re-reading of a result that had already passed, and they
+    are reported whatever they say.
+    """
+    con = con or duckdb.connect()
+    rem = load_rem20(con)
+    surge = surge_facility_months(years, con=con)
+    fm = facility_month_occupancy(rem, PRIMARY_AREAS, years)
+    fm["occ_anom"] = deseasonalize(fm, "occ")
+
+    # A. "Bad winter", not "this facility". The month-of-year control removes AVERAGE seasonality,
+    # not year-to-year severity: a severe season raises surge counts and occupancy everywhere at
+    # once, which the published contrast would read as an association. Removing the cross-facility
+    # mean anomaly for each (year, month) leaves only within-month, between-facility variation --
+    # i.e. "was THIS facility surging, relative to the country that same month".
+    fm["occ_anom_net"] = fm["occ_anom"] - fm.groupby(["anio", "mes"])["occ_anom"].transform("mean")
+
+    # B. Numerator or denominator? INDICE_OCUPACIONAL is occupied / AVAILABLE bed-days and the
+    # denominator moves. Beds close when staff go on sick leave, which is exactly what a respiratory
+    # wave causes -- that would raise the index with no additional patient, a different mechanism
+    # from the one the result claims.
+    fm["ocu_anom"] = deseasonalize(fm, "ocu")
+    fm["disp_anom"] = deseasonalize(fm, "disp")
+
+    joined = fm.merge(surge, on=["cod", "anio", "mes"], how="inner")
+    print("\n=== AUDIT A/B: what is actually moving " + "=" * 26)
+    for col, name in [("occ_anom", "occupancy, as published"),
+                      ("occ_anom_net", "  A. national month removed"),
+                      ("ocu_anom", "  B. numerator: bed-days OCCUPIED"),
+                      ("disp_anom", "  B. denominator: bed-days AVAILABLE")]:
+        d = facility_contrast(joined, col)
+        lo, hi = bootstrap_median(d)
+        print(f"  {name:<38} median {d.median():+.3f}  CI [{lo:+.3f}, {hi:+.3f}]  "
+              f"pos {(d > 0).mean():.0%}  n={len(d)}")
+
+    # C. Are the negative controls flat, or merely underpowered? The primary set pools 8 wards and
+    # the controls 2, so the primary index is built on more beds and is measured more precisely.
+    # A per-area contrast beside each area's bed count separates "does not respond" from "too small
+    # to tell". Physiology also predicts a ranking here, which is a harder test than a group mean.
+    print("\n=== AUDIT C: per area, with size " + "=" * 33)
+    print(f"  {'area':>5} {'role':<9} {'beds/mo':>8} {'fac':>4} {'median d':>9}  CI")
+    for area in PRIMARY_AREAS + CONTROL_AREAS:
+        one = facility_month_occupancy(rem, [area], years)
+        one["occ_anom"] = deseasonalize(one, "occ")
+        j = one.merge(surge, on=["cod", "anio", "mes"], how="inner")
+        d = facility_contrast(j, "occ_anom")
+        lo, hi = bootstrap_median(d)
+        beds = (one["disp"] / 30).median()   # bed-days per month -> beds
+        role = "control" if area in CONTROL_AREAS else "primary"
+        print(f"  {area:>5} {role:<9} {beds:>8.0f} {len(d):>4} {d.median():>+9.3f}  "
+              f"[{lo:+.3f}, {hi:+.3f}]")
+
+
 def demo():
     """Self-check on the two reconstructions this module depends on."""
     # The published percentage must be reproducible from the day counts, or pooling areas is invalid.

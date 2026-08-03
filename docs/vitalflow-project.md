@@ -674,6 +674,17 @@ definition.
    dose-response. **The negative-control wards — obstetrics and adult psychiatry — are flat in both
    windows**, which is what separates respiratory strain from "the hospital is busy in winter".
    **The seasonal control was worth 4×–5.6×**: raw, the same contrast reads +1.96 pp and +5.24 pp.
+   **⚠ Audited adversarially 2026-08-01, and two things changed.** Removing the national (year,
+   month) common component — a severe season raises surges and occupancy everywhere at once — cuts
+   the effect **~40%, to +0.060 and +0.092 SD**, both CIs still excluding zero. Those are the honest
+   figures. And **the strain is paediatric**: paediatric medicine, ICU and intermediate run ≈ +0.19
+   (2022–2026) and +0.21 (2015–2019), while **adult wards are a precise null** in the era that ships
+   — area 401, the best-measured ward in the file at ~103 facilities, returns CI [−0.059, +0.079].
+   The phrase "adult and paediatric" published 2026-07-31 is **withdrawn**; the pooled pre-registered
+   verdict is unaffected. Refuted on the way: the moving-denominator artifact (beds closing under
+   staff sick leave would raise the index with no extra patient) — occupied bed-days rise **+0.119 /
+   +0.132** while available bed-days do not (**+0.033 / −0.000**), so it is patients, not closed beds.
+   The paediatric split is **replicated exploratory**, not pre-registered.
    *Three things this does not license:* a magnitude claim (half a percentage point of occupancy is
    small), converting the monthly effect into a weekly one (it is a **lower bound**, and the
    arithmetic is an assumption), and **anything about the 446 ambulatory facilities carrying 73.7% of

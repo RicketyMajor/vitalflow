@@ -1,0 +1,253 @@
+/* VitalFlow — "la pizarra del turno".
+   Tokens and component patterns ported from `alert-interface-mockup.html`, recorded in
+   `.interface-design/system.md`. The direction is settled in `context/specs/alert-interface.md`
+   and is not reopened here. Every choice answers to a measurement:
+
+     - The CALM screen is the primary screen. 94% of facility-weeks carry no alert.
+     - No probability is ever displayed; only a rank within the facility's own season.
+     - No third decimal anywhere.
+     - Triage colours are deliberately unused; calm carries no accent at all. */
+
+:root {
+  color-scheme: light dark;
+
+  --muro:      #e9edea;   /* pale green-cold wall under fluorescent light */
+  --pizarra:   #f7f9f7;   /* the board itself */
+  --hueco:     #dfe4e1;   /* inset wells, unwatched weeks */
+  --borde:     rgba(20, 26, 24, 0.11);
+  --borde-int: rgba(20, 26, 24, 0.07);
+  --tinta:     #141a18;
+  --rotulo:    #56635e;
+  --tenue:     #8b968f;
+  --alerta:    #1f4a7a;   /* MINSAL institutional blue. THE ONLY ACCENT. */
+  --alerta-df: rgba(31, 74, 122, 0.12);
+  --campana:   rgba(31, 74, 122, 0.075);
+
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+  --prosa: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --u: 4px;
+  --r-chico: 3px;
+  --r-medio: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --muro: #0f1412; --pizarra: #161d1a; --hueco: #1e2623;
+    --borde: rgba(232,237,234,0.10); --borde-int: rgba(232,237,234,0.06);
+    --tinta: #e8edea; --rotulo: #96a49d; --tenue: #6d7a74;
+    --alerta: #7fb0e6; --alerta-df: rgba(127,176,230,0.16); --campana: rgba(127,176,230,0.10);
+  }
+}
+:root[data-theme="dark"] {
+  --muro: #0f1412; --pizarra: #161d1a; --hueco: #1e2623;
+  --borde: rgba(232,237,234,0.10); --borde-int: rgba(232,237,234,0.06);
+  --tinta: #e8edea; --rotulo: #96a49d; --tenue: #6d7a74;
+  --alerta: #7fb0e6; --alerta-df: rgba(127,176,230,0.16); --campana: rgba(127,176,230,0.10);
+}
+:root[data-theme="light"] {
+  --muro: #e9edea; --pizarra: #f7f9f7; --hueco: #dfe4e1;
+  --borde: rgba(20,26,24,0.11); --borde-int: rgba(20,26,24,0.07);
+  --tinta: #141a18; --rotulo: #56635e; --tenue: #8b968f;
+  --alerta: #1f4a7a; --alerta-df: rgba(31,74,122,0.12); --campana: rgba(31,74,122,0.075);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body, h1, h2, h3, p, dl, dd, ol, ul, figure { margin: 0; padding: 0; }
+ol, ul { list-style: none; }
+
+body {
+  background: var(--muro);
+  color: var(--tinta);
+  font-family: var(--prosa);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  padding: calc(var(--u) * 9) calc(var(--u) * 5) calc(var(--u) * 16);
+}
+
+.hoja { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column;
+        gap: calc(var(--u) * 10); }
+
+a { color: inherit; }
+a:focus-visible, [tabindex]:focus-visible, input:focus-visible, button:focus-visible {
+  outline: 2px solid var(--alerta); outline-offset: 2px; border-radius: var(--r-chico);
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---- annotation layer: ABOUT the product, never part of it ---------------- */
+.nota { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.07em;
+        text-transform: uppercase; color: var(--tenue);
+        display: flex; flex-wrap: wrap; gap: calc(var(--u) * 2); align-items: baseline; }
+.nota b { color: var(--rotulo); font-weight: 500; }
+.nota--pie { text-transform: none; letter-spacing: 0; font-size: 12.5px;
+             line-height: 1.6; max-width: 62ch; display: block; }
+
+.encabezado { display: flex; flex-direction: column; gap: calc(var(--u) * 3);
+              border-bottom: 1px solid var(--borde); padding-bottom: calc(var(--u) * 6); }
+.encabezado h1 { font-family: var(--mono); font-size: 20px; font-weight: 600;
+                 letter-spacing: -0.01em; }
+.encabezado p { color: var(--rotulo); max-width: 64ch; text-wrap: pretty; }
+.encabezado nav { display: flex; gap: calc(var(--u) * 4); font-family: var(--mono);
+                  font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+.encabezado nav a { color: var(--tenue); text-decoration: none; }
+.encabezado nav a:hover, .encabezado nav a[aria-current] { color: var(--alerta); }
+
+/* ---- the board ------------------------------------------------------------ */
+.pantalla { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
+
+.tablero { background: var(--pizarra); border: 1px solid var(--borde);
+           border-radius: var(--r-medio); overflow: hidden; }
+
+.barra { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 2) calc(var(--u) * 4);
+         align-items: baseline; justify-content: space-between;
+         padding: calc(var(--u) * 4) calc(var(--u) * 5);
+         border-bottom: 1px solid var(--borde-int); }
+.barra strong { font-size: 15px; font-weight: 600; }
+.barra span { font-family: var(--mono); font-size: 12px; color: var(--tenue);
+              letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+
+/* the focal block — one per screen, dominating by size + space */
+.estado { padding: calc(var(--u) * 9) calc(var(--u) * 5) calc(var(--u) * 8);
+          display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
+.estado__rotulo { font-family: var(--mono); font-size: 11.5px; font-weight: 500;
+                  letter-spacing: 0.14em; text-transform: uppercase; color: var(--tenue); }
+.estado__titular { font-family: var(--mono); font-size: 40px; font-weight: 600;
+                   letter-spacing: -0.025em; line-height: 1.1; text-wrap: balance; }
+.estado__glosa { color: var(--rotulo); max-width: 56ch; text-wrap: pretty; }
+.estado--alerta .estado__titular, .estado--alerta .estado__rotulo { color: var(--alerta); }
+
+.horizonte { display: flex; align-items: center; gap: calc(var(--u) * 3);
+             font-family: var(--mono); font-size: 12.5px; color: var(--rotulo);
+             font-variant-numeric: tabular-nums; margin-top: calc(var(--u) * 2); }
+.horizonte i { font-style: normal; color: var(--tenue); }
+.horizonte em { font-style: normal; color: var(--tinta); font-weight: 600; }
+.horizonte .tramo { flex: 0 0 44px; height: 1px; background: var(--borde); position: relative; }
+.horizonte .tramo::after { content: ""; position: absolute; right: 0; top: -2px;
+                           width: 1px; height: 5px; background: var(--borde); }
+
+/* ---- the signature: la cinta de la temporada ------------------------------ */
+.cinta { padding: calc(var(--u) * 6) calc(var(--u) * 5) calc(var(--u) * 5);
+         border-top: 1px solid var(--borde-int); display: flex;
+         flex-direction: column; gap: calc(var(--u) * 3); }
+.cinta__titulo { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.12em;
+                 text-transform: uppercase; color: var(--tenue);
+                 display: flex; justify-content: space-between; gap: calc(var(--u) * 4);
+                 flex-wrap: wrap; }
+.cinta__pista { display: flex; gap: 2px; align-items: flex-end; min-height: 34px;
+                overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; }
+.semana { flex: 1 1 0; min-width: 6px; height: 26px; border-radius: 1px;
+          background: var(--hueco); position: relative; }
+.semana--revisada { background: var(--borde); }
+/* The campaign band washes OVER the cell, not behind it: `z-index:-1` (as in the maquette) puts it
+   behind `.tablero`'s own background, where it is invisible. At 5% the wash reads as a band either
+   way. */
+.semana--campana::before { content: ""; position: absolute; inset: -6px 0 -5px;
+                           background: var(--campana); }
+.semana--alza { background: var(--tinta); height: 34px; }
+.semana--alertada { background: var(--alerta); height: 34px; }   /* declared last: an aviso wins the cell */
+/* both at once — the model warned AND the alza happened: blue cell, ink cap */
+.semana--alza.semana--alertada::after { content: ""; position: absolute; left: 0; right: 0; top: 0;
+                                        height: 8px; border-radius: 1px 1px 0 0;
+                                        background: var(--tinta); }
+.cinta__eje { display: flex; justify-content: space-between; font-family: var(--mono);
+              font-size: 10.5px; color: var(--tenue); letter-spacing: 0.04em;
+              font-variant-numeric: tabular-nums; }
+.leyenda { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 4);
+           font-family: var(--mono); font-size: 11px; color: var(--tenue);
+           letter-spacing: 0.03em; }
+.leyenda span { display: flex; align-items: center; gap: calc(var(--u) * 1.5); }
+.llave { width: 8px; height: 10px; border-radius: 1px; background: var(--hueco); }
+.llave--revisada { background: var(--borde); }
+.llave--alertada { background: var(--alerta); }
+.llave--alza { background: var(--tinta); }
+.llave--campana { background: var(--campana); outline: 1px solid var(--borde-int); }
+
+/* ---- the weekly series (AC-E4) -------------------------------------------- */
+.serie { padding: calc(var(--u) * 6) calc(var(--u) * 5) calc(var(--u) * 5);
+         border-top: 1px solid var(--borde-int); display: flex;
+         flex-direction: column; gap: calc(var(--u) * 3); }
+.serie svg { width: 100%; height: auto; display: block; overflow: visible; }
+.serie text { font-family: var(--mono); font-size: 10.5px; fill: var(--tenue);
+              letter-spacing: 0.04em; }
+.serie rect[role="button"] { cursor: default; }
+.serie__lectura { font-family: var(--mono); font-size: 12px; color: var(--rotulo);
+                  letter-spacing: 0.04em; font-variant-numeric: tabular-nums;
+                  min-height: 1.5em; display: flex; flex-wrap: wrap;
+                  gap: calc(var(--u) * 1) calc(var(--u) * 3); }
+.serie__lectura span + span::before, .serie__lectura b + span::before,
+.serie__lectura i + span::before { content: "· "; color: var(--tenue); }
+.serie__lectura b { color: var(--tinta); font-weight: 600; }
+.serie__lectura i { font-style: normal; color: var(--alerta); font-weight: 600; }
+
+/* the table view: every value the hover readout gives one at a time */
+.tabla summary { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+                 text-transform: uppercase; color: var(--tenue); cursor: default; }
+.tabla table { border-collapse: collapse; margin-top: calc(var(--u) * 3); width: 100%;
+               font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tabla th, .tabla td { text-align: right; padding: 2px calc(var(--u) * 2);
+                       border-bottom: 1px solid var(--borde-int); }
+.tabla th { color: var(--tenue); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;
+            font-size: 10.5px; }
+.tabla td { color: var(--rotulo); }
+.tabla td:first-child { color: var(--tinta); }
+
+/* ---- fact row ------------------------------------------------------------- */
+.hechos { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+          border-top: 1px solid var(--borde-int); }
+.hecho { padding: calc(var(--u) * 5); display: flex; flex-direction: column;
+         gap: calc(var(--u) * 1.5); border-left: 1px solid var(--borde-int); }
+.hecho:first-child { border-left: 0; }
+.hecho dt { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+            text-transform: uppercase; color: var(--tenue); }
+.hecho dd { font-family: var(--mono); font-size: 19px; font-weight: 600;
+            letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.hecho small { color: var(--rotulo); font-family: var(--prosa); font-size: 12.5px;
+               line-height: 1.45; text-wrap: pretty; }
+
+/* ---- vigilance footer ----------------------------------------------------- */
+.vigilancia { border-top: 1px solid var(--borde-int);
+              padding: calc(var(--u) * 4) calc(var(--u) * 5); display: flex; flex-wrap: wrap;
+              gap: calc(var(--u) * 2) calc(var(--u) * 6); align-items: baseline;
+              justify-content: space-between; background: var(--muro); }
+.vigilancia p { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.04em;
+                color: var(--rotulo); font-variant-numeric: tabular-nums; }
+.vigilancia p b { color: var(--tinta); font-weight: 600; }
+.pulso { display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+         background: var(--rotulo); margin-right: 6px; vertical-align: 1px; }
+
+/* ---- explorer: search + list ---------------------------------------------- */
+.buscador { display: flex; flex-direction: column; gap: calc(var(--u) * 2); }
+.buscador input { font-family: var(--mono); font-size: 14px; color: var(--tinta);
+                  background: var(--pizarra); border: 1px solid var(--borde);
+                  border-radius: var(--r-medio); padding: calc(var(--u) * 3) calc(var(--u) * 4);
+                  width: 100%; }
+.buscador input::placeholder { color: var(--tenue); }
+
+.listado { background: var(--pizarra); border: 1px solid var(--borde);
+           border-radius: var(--r-medio); overflow: hidden; }
+.listado a { display: grid; grid-template-columns: 1fr auto; gap: calc(var(--u) * 1)
+             calc(var(--u) * 4); align-items: baseline; text-decoration: none;
+             padding: calc(var(--u) * 3) calc(var(--u) * 5);
+             border-top: 1px solid var(--borde-int); }
+.listado a:first-child { border-top: 0; }
+.listado a:hover { background: var(--muro); }
+.listado a strong { font-weight: 600; font-size: 14px; grid-area: 1 / 1; }
+.listado a small { font-family: var(--mono); font-size: 11px; color: var(--tenue);
+                   letter-spacing: 0.04em; text-transform: uppercase; grid-area: 2 / 1; }
+.listado a em { font-style: normal; font-family: var(--mono); font-size: 11.5px;
+                color: var(--rotulo); letter-spacing: 0.04em; text-align: right;
+                font-variant-numeric: tabular-nums; grid-area: 1 / 2 / span 2 / auto;
+                align-self: center; }
+.listado a em b { color: var(--alerta); font-weight: 600; }
+.listado__vacio { padding: calc(var(--u) * 5); color: var(--rotulo); }
+
+.cargando { font-family: var(--mono); font-size: 12px; color: var(--tenue);
+            letter-spacing: 0.06em; text-transform: uppercase; }
+
+@media (max-width: 620px) {
+  body { padding: calc(var(--u) * 6) calc(var(--u) * 3) calc(var(--u) * 10); }
+  .estado__titular { font-size: 30px; }
+  .hecho { border-left: 0; border-top: 1px solid var(--borde-int); }
+  .hecho:first-child { border-top: 0; }
+}

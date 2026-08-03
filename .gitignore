@@ -7,6 +7,10 @@ venv/
 
 # Node
 node_modules/
+dist/
+
+# Frontend Data
+frontend/public/data/facility/
 
 # Agent tooling & working context — personal aids, not part of the project
 /.agents/
