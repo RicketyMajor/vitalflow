@@ -15,6 +15,7 @@ frontend/public/data/facility/
 # Agent tooling & working context — personal aids, not part of the project
 /.agents/
 /.claude/
+/.interface-design/
 /context/
 
 # Data is local-only — too large for git. Paths documented in context/sources/index.md

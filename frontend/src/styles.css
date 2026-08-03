@@ -22,6 +22,7 @@
   --alerta:    #1f4a7a;   /* MINSAL institutional blue. THE ONLY ACCENT. */
   --alerta-df: rgba(31, 74, 122, 0.12);
   --campana:   rgba(31, 74, 122, 0.075);
+  --opera:     rgba(20, 26, 24, 0.035);   /* the ledger row at the operational horizon */
 
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
   --prosa: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -36,20 +37,20 @@
     --muro: #0f1412; --pizarra: #161d1a; --hueco: #1e2623;
     --borde: rgba(232,237,234,0.10); --borde-int: rgba(232,237,234,0.06);
     --tinta: #e8edea; --rotulo: #96a49d; --tenue: #6d7a74;
-    --alerta: #7fb0e6; --alerta-df: rgba(127,176,230,0.16); --campana: rgba(127,176,230,0.10);
+    --alerta: #7fb0e6; --alerta-df: rgba(127,176,230,0.16); --campana: rgba(127,176,230,0.10); --opera: rgba(232,237,234,0.045);
   }
 }
 :root[data-theme="dark"] {
   --muro: #0f1412; --pizarra: #161d1a; --hueco: #1e2623;
   --borde: rgba(232,237,234,0.10); --borde-int: rgba(232,237,234,0.06);
   --tinta: #e8edea; --rotulo: #96a49d; --tenue: #6d7a74;
-  --alerta: #7fb0e6; --alerta-df: rgba(127,176,230,0.16); --campana: rgba(127,176,230,0.10);
+  --alerta: #7fb0e6; --alerta-df: rgba(127,176,230,0.16); --campana: rgba(127,176,230,0.10); --opera: rgba(232,237,234,0.045);
 }
 :root[data-theme="light"] {
   --muro: #e9edea; --pizarra: #f7f9f7; --hueco: #dfe4e1;
   --borde: rgba(20,26,24,0.11); --borde-int: rgba(20,26,24,0.07);
   --tinta: #141a18; --rotulo: #56635e; --tenue: #8b968f;
-  --alerta: #1f4a7a; --alerta-df: rgba(31,74,122,0.12); --campana: rgba(31,74,122,0.075);
+  --alerta: #1f4a7a; --alerta-df: rgba(31,74,122,0.12); --campana: rgba(31,74,122,0.075); --opera: rgba(20,26,24,0.035);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -91,7 +92,10 @@ a:focus-visible, [tabindex]:focus-visible, input:focus-visible, button:focus-vis
 .encabezado nav { display: flex; gap: calc(var(--u) * 4); font-family: var(--mono);
                   font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
 .encabezado nav a { color: var(--tenue); text-decoration: none; }
-.encabezado nav a:hover, .encabezado nav a[aria-current] { color: var(--alerta); }
+/* Current page is marked by weight and a rule, not by the accent: on #/evidencia the institutional
+   ink means "the operational horizon", and a blue nav item would break that thread before it starts. */
+.encabezado nav a:hover { color: var(--rotulo); }
+.encabezado nav a[aria-current] { color: var(--tinta); box-shadow: inset 0 -1px 0 var(--borde); }
 
 /* ---- the board ------------------------------------------------------------ */
 .pantalla { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
@@ -244,6 +248,156 @@ a:focus-visible, [tabindex]:focus-visible, input:focus-visible, button:focus-vis
 
 .cargando { font-family: var(--mono); font-size: 12px; color: var(--tenue);
             letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* ---- evidencia: el pliego -------------------------------------------------
+   A register of predictions and their outcomes. The world is unchanged; the ONE accent is
+   re-pointed for this surface only — here it marks the operational horizon (h=2) and nothing else,
+   so a single blue thread runs the page tracing the numbers that actually ship. */
+.pliego { display: flex; flex-direction: column; gap: calc(var(--u) * 14); }
+
+.pliego__tramo { display: flex; flex-direction: column; gap: calc(var(--u) * 4); }
+.pliego__titulo { font-family: var(--mono); font-size: 21px; font-weight: 600;
+                 letter-spacing: -0.015em; line-height: 1.25; text-wrap: balance; max-width: 30ch; }
+.pliego__titulo--pagina { font-size: 30px; letter-spacing: -0.025em; }
+/* the annotation layer is a flex row by default; this instance is one sentence */
+.nota--linea { display: block; }
+.pliego__tramo p, .ficha__cuerpo p { max-width: 66ch; color: var(--rotulo); text-wrap: pretty; }
+.pliego__tramo p strong, .ficha__cuerpo p strong, .limites strong, .ausencias b { color: var(--tinta);
+                                                                          font-weight: 600; }
+.pliego__entrada { font-size: 16px; }
+.pie { font-size: 13.5px; }
+.remate { border-left: 1px solid var(--borde); padding-left: calc(var(--u) * 4); }
+code { font-family: var(--mono); font-size: 0.92em; color: var(--tinta);
+       background: var(--hueco); border-radius: var(--r-chico); padding: 1px 5px; }
+.rotulo { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
+          text-transform: uppercase; color: var(--tenue); font-weight: 500;
+          margin-top: calc(var(--u) * 2); }
+
+/* the operational thread — always underlined, and hovering one lights every one on the page.
+   Mono, because system.md reserves it for data and this thread is nothing but data. */
+.despliega { font-family: var(--mono); font-size: 0.94em; color: var(--tinta); font-weight: 600;
+             font-variant-numeric: tabular-nums;
+             box-shadow: inset 0 -0.34em 0 -0.16em var(--alerta-df);
+             transition: box-shadow 180ms cubic-bezier(0.2, 0.7, 0.3, 1),
+                         color 180ms cubic-bezier(0.2, 0.7, 0.3, 1); }
+.pliego:has(.despliega:hover) .despliega { box-shadow: inset 0 -0.34em 0 -0.16em var(--alerta);
+                                           color: var(--alerta); }
+
+/* a callout that turns a result against itself — used twice, both times deliberately */
+.advertencia { border: 1px solid var(--borde); border-radius: var(--r-medio);
+               padding: calc(var(--u) * 4) calc(var(--u) * 5); background: var(--muro); }
+.advertencia b { color: var(--tinta); font-weight: 600; }
+/* a claim this project published and then withdrew. It stays on the page. */
+.retirada { color: var(--tenue); }
+.retirada b { color: var(--rotulo); font-weight: 600; }
+.retirada s { text-decoration-color: var(--tenue); text-decoration-thickness: 1px; }
+
+/* ---- the record: what was written before, and what came back -------------- */
+.ficha { background: var(--pizarra); border: 1px solid var(--borde);
+         border-radius: var(--r-medio); overflow: hidden; }
+.ficha__cabeza { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline;
+                 gap: calc(var(--u) * 2) calc(var(--u) * 4);
+                 padding: calc(var(--u) * 4) calc(var(--u) * 5);
+                 border-bottom: 1px solid var(--borde-int); }
+.ficha__cabeza h3 { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+.ficha__cuerpo { padding: calc(var(--u) * 6) calc(var(--u) * 5) calc(var(--u) * 7);
+                 display: flex; flex-direction: column; gap: calc(var(--u) * 4); }
+.veredicto { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
+             text-transform: uppercase; color: var(--rotulo); border: 1px solid var(--borde);
+             border-radius: var(--r-chico); padding: 2px calc(var(--u) * 2); white-space: nowrap; }
+.protocolo { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 2) calc(var(--u) * 5);
+             font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+             text-transform: uppercase; color: var(--tinta); align-items: baseline;
+             border-bottom: 1px solid var(--borde-int); padding-bottom: calc(var(--u) * 4); }
+.protocolo span { white-space: nowrap; }
+.protocolo b { color: var(--tenue); font-weight: 500; margin-right: calc(var(--u) * 1.5); }
+
+.contraste { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u) * 6);
+             border-top: 1px solid var(--borde-int); border-bottom: 1px solid var(--borde-int);
+             padding: calc(var(--u) * 5) 0; }
+.contraste__lado { display: flex; flex-direction: column; gap: calc(var(--u) * 2); }
+.contraste__lado h4 { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
+                      text-transform: uppercase; color: var(--tenue); font-weight: 500; }
+/* ink density carries time: the prediction is faint, the result is solid */
+.contraste--antes p { color: var(--tenue); }
+.contraste--despues p { color: var(--tinta); }
+
+/* ---- tables: the ledger --------------------------------------------------- */
+.registro__caja { overflow-x: auto; margin: calc(var(--u) * 2) 0; }
+.registro { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px;
+            font-variant-numeric: tabular-nums; white-space: nowrap; }
+.registro caption { text-align: left; font-size: 10.5px; letter-spacing: 0.1em;
+                    text-transform: uppercase; color: var(--tenue);
+                    padding-bottom: calc(var(--u) * 3); }
+.registro th { font-weight: 500; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+               color: var(--tenue); text-align: right; padding: 0 calc(var(--u) * 3)
+               calc(var(--u) * 2) 0; border-bottom: 1px solid var(--borde); }
+.registro thead th:first-child { text-align: left; }
+.registro td { text-align: right; color: var(--rotulo);
+               padding: calc(var(--u) * 2) calc(var(--u) * 3) calc(var(--u) * 2) 0;
+               border-bottom: 1px solid var(--borde-int); }
+.registro tbody th { text-align: left; color: var(--tinta); font-size: 12.5px; font-weight: 500;
+                     letter-spacing: 0; text-transform: none; white-space: normal;
+                     border-bottom: 1px solid var(--borde-int);
+                     padding: calc(var(--u) * 2) calc(var(--u) * 5) calc(var(--u) * 2) 0; }
+.registro tbody th i { font-style: normal; color: var(--tenue); }
+.registro tbody tr:last-child th, .registro tbody tr:last-child td { border-bottom: 0; }
+/* ink density carries time here too: what was predicted is faint, what came back is solid */
+.registro .antes { color: var(--tenue); }
+.registro .vuelta { color: var(--tinta); }
+.registro .falla { color: var(--tinta); }
+.registro .falla::before { content: "— "; color: var(--tenue); }
+/* the operational rows get their own wash — `--campana` is the winter-campaign band and means
+   something else on the facility screen */
+.fila--opera th, .fila--opera td { background: var(--opera); }
+.vsr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+/* the range, drawn: band = plausible range, faint tick = the point predicted, solid tick = what
+   came back. A tick outside the band is a prediction that missed, readable without the verdict. */
+.rango { position: relative; display: inline-block; width: 104px; height: 14px;
+         vertical-align: middle; margin-left: calc(var(--u) * 2); }
+.rango__banda { position: absolute; left: 20%; right: 20%; top: 50%; height: 1px;
+                background: var(--borde); }
+.rango__banda::before, .rango__banda::after { content: ""; position: absolute; top: -3px;
+                                              width: 1px; height: 7px; background: var(--borde); }
+.rango__banda::before { left: 0; }
+.rango__banda::after { right: 0; }
+.rango__previo { position: absolute; left: calc(var(--p) * 100%); top: 4px; width: 1px; height: 6px;
+                 background: var(--tenue); }
+.rango__marca { position: absolute; left: calc(var(--v) * 100%); top: 1px; width: 2px; height: 12px;
+                background: var(--tinta); border-radius: 1px; }
+.rango--fuera .rango__marca { background: var(--tinta); }
+.rango--fuera .rango__marca::after { content: ""; position: absolute; left: -2px; top: -3px;
+                                     width: 6px; height: 2px; background: var(--tinta); }
+
+/* ---- the five traps: numbered because the project cites them by number ----- */
+.trampas { display: flex; flex-direction: column; gap: calc(var(--u) * 4);
+           counter-reset: trampa; max-width: 70ch; }
+.trampas li { display: grid; grid-template-columns: auto 1fr; column-gap: calc(var(--u) * 4);
+              row-gap: calc(var(--u) * 0.5); align-items: baseline; }
+.trampas li::before { content: counter(trampa, decimal-leading-zero); counter-increment: trampa;
+                      grid-area: 1 / 1 / span 2 / auto;
+                      font-family: var(--mono); font-size: 11px; color: var(--tenue);
+                      font-variant-numeric: tabular-nums; }
+.trampas b { grid-column: 2; font-weight: 600; color: var(--tinta); }
+.trampas span { grid-column: 2; color: var(--rotulo); text-wrap: pretty; }
+
+.limites { display: flex; flex-direction: column; gap: calc(var(--u) * 2.5); max-width: 66ch;
+           color: var(--rotulo); }
+.limites li { padding-left: calc(var(--u) * 4); position: relative; text-wrap: pretty; }
+.limites li::before { content: ""; position: absolute; left: 0; top: 0.62em; width: 7px; height: 1px;
+                      background: var(--tenue); }
+
+.ausencias { display: flex; flex-direction: column; }
+.ausencias li { border-top: 1px solid var(--borde-int); padding: calc(var(--u) * 4) 0;
+                max-width: 68ch; color: var(--rotulo); text-wrap: pretty; }
+.ausencias li:first-child { border-top: 0; padding-top: 0; }
+.ausencias b { display: block; font-weight: 600; }
+
+@media (max-width: 620px) {
+  .contraste { grid-template-columns: 1fr; gap: calc(var(--u) * 5); }
+  .pliego__titulo { font-size: 18px; }
+}
 
 @media (max-width: 620px) {
   body { padding: calc(var(--u) * 6) calc(var(--u) * 3) calc(var(--u) * 10); }

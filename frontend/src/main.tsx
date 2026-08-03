@@ -6,6 +6,7 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { loadFacility, loadIndex } from "./data";
 import type { Facility as F, Index } from "./data";
+import { Evidence } from "./Evidence";
 import { Explorer } from "./Explorer";
 import { Facility } from "./Facility";
 import "./styles.css";
@@ -34,9 +35,8 @@ function useAsync<T>(fn: () => Promise<T>, key: string) {
 }
 
 function App() {
-  const route = useHash();
-  const code = route.slice(1);
-  const index = useAsync<Index>(loadIndex, "index");
+  const path = useHash().replace(/^\//, "");
+  const evidencia = path === "evidencia";
 
   return (
     <div className="hoja">
@@ -47,21 +47,21 @@ function App() {
           umbral de cada servicio. Se puede ver al modelo acertar y se puede ver fallar.
         </p>
         <nav>
-          <a href="#/" aria-current={code ? undefined : "page"}>Todos los servicios</a>
+          <a href="#/" aria-current={path ? undefined : "page"}>Todos los servicios</a>
+          <a href="#/evidencia" aria-current={evidencia ? "page" : undefined}>Evidencia</a>
         </nav>
       </header>
 
-      {index.error ? (
-        <p className="cargando">No se pudo leer el índice de servicios.</p>
-      ) : !index.data ? (
-        <p className="cargando">Cargando…</p>
-      ) : code ? (
-        <FacilityRoute code={code} />
-      ) : (
-        <Explorer index={index.data} />
-      )}
+      {evidencia ? <Evidence /> : path ? <FacilityRoute code={path} /> : <ExplorerRoute />}
     </div>
   );
+}
+
+function ExplorerRoute() {
+  const { data, error } = useAsync<Index>(loadIndex, "index");
+  if (error) return <p className="cargando">No se pudo leer el índice de servicios.</p>;
+  if (!data) return <p className="cargando">Cargando…</p>;
+  return <Explorer index={data} />;
 }
 
 /** AC-E6: the facility file is fetched here, on selection — never as part of the first paint. */
