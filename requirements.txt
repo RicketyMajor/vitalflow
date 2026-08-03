@@ -8,6 +8,12 @@ pyarrow
 requests
 scipy
 geopy
+# The model. Was missing until 2026-08-03 — train_model.py imports it, so a fresh clone could
+# install every requirement and still not run the thing the project is about.
+scikit-learn
+# Reads the official REM manual PDF, which is what settles what a cause row means. Not imported by
+# any module: used ad hoc, and the reason IdCausa=34 stopped being "blocked on a physician".
+pypdf
 ydata-profiling
 sweetviz
 dtale

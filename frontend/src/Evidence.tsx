@@ -17,15 +17,42 @@
  * ledger of fichas where each row's plausible range is drawn and the outcome is a tick on it.
  * Seed key 06c17f13, surface scope, Read mode.
  *
- * Every figure is quoted from `docs/vitalflow-project.md` §9.1/§9.1b, `2026-sealed-holdout.md` and
- * `rem20-construct-validity.md`. They are published results, not runtime data — this file is the
- * one place to update them. **They print the digits that were measured**; the project's rule is
- * that no conclusion may rest on the third one, not that the third one be hidden. */
+ * Every figure is quoted from `docs/vitalflow-project.md` §9.1/§9.1b, `2026-sealed-holdout.md`,
+ * `rem20-construct-validity.md` and `abandonment-construct-validity.md`. They are published
+ * results, not runtime data — this file is the one place to update them. **They print the digits
+ * that were measured**; the project's rule is that no conclusion may rest on the third one, not
+ * that the third one be hidden.
+ *
+ * 2026-08-03: added ficha 4b, the abandonment test, which is the first entry on this page that
+ * DID NOT PASS. It also retires a sentence this page used to carry — that the ambulatory 74% was
+ * "formalmente no verificable" — which the test itself falsified. Two claims elsewhere on the page
+ * were corrected with it. */
 
 /** Where the outcome falls on its own predicted range. The band occupies the middle 60% of the
  *  track so a prediction that missed still lands on screen — which is the point of drawing it. */
 const pos = (lo: number, hi: number, v: number) =>
   Math.min(0.98, Math.max(0.02, 0.2 + (0.6 * (v - lo)) / (hi - lo)));
+
+type Fila = {
+  range: string; got: string; verdict: string; falla?: boolean;
+  lo: number; hi: number; v: number;
+  /** The point value that was predicted, or null when the pre-registration named only a direction
+   *  and a range. A null draws no faint tick: filling the column with a midpoint would put a
+   *  prediction on screen that nobody made. */
+  p: number | null;
+};
+
+const Rango = ({ r }: { r: Fila }) => (
+  <span className={`rango${r.falla ? " rango--fuera" : ""}`}
+        style={{ "--v": pos(r.lo, r.hi, r.v),
+                 ...(r.p === null ? {} : { "--p": pos(r.lo, r.hi, r.p) }) } as React.CSSProperties}
+        role="img"
+        aria-label={`Rango ${r.range}; volvió ${r.got}: ${r.verdict}`}>
+    <i className="rango__banda" />
+    {r.p === null ? null : <i className="rango__previo" />}
+    <i className="rango__marca" />
+  </span>
+);
 
 const MARGEN_H2 = [
   { season: "2024", cal: "0.117", model: "0.117", margin: "+0.00", note: "empate exacto" },
@@ -49,6 +76,20 @@ const HOLDOUT = [
     lo: 2, hi: 3, p: 2.5, v: 1.98, verdict: "marginalmente por debajo", key: false, falla: true },
   { q: "Servicios silenciosos de 180, h=1", pred: "25", range: "10 – 50", got: "72",
     lo: 10, hi: 50, p: 25, v: 72, verdict: "sobre el rango", key: false, falla: true },
+];
+
+/* The abandonment test, pre-registered 2026-08-03 and NOT PASSED. Only the quantities that were
+ * given a numeric range are drawn; the pre-registration named a direction and a range for the
+ * primary, never a point value, so `p` is null and no faint tick is drawn for it. Inventing one
+ * to fill the column would be the same class of error as the "+0.50 pp" this page already carries. */
+const ABANDONO = [
+  { q: "Contraste mediano, ambulatorio — resultado primario", pred: "positivo",
+    range: "+0.05 – +0.40 SD", got: "−0.049", lo: 0.05, hi: 0.40, p: null, v: -0.049,
+    verdict: "FALSIFICADA · signo contrario", falla: true },
+  { q: "Servicios ambulatorios con contraste > 0", pred: "—", range: "55% – 75%", got: "42%",
+    lo: 55, hi: 75, p: null, v: 42, verdict: "falsificada", falla: true },
+  { q: "Servicios con brecha siempre cero", pred: "—", range: "5% – 25%", got: "6.4%",
+    lo: 5, hi: 25, p: null, v: 6.4, verdict: "dentro", falla: false },
 ];
 
 const ONSET = [
@@ -182,17 +223,7 @@ export function Evidence() {
                     <th scope="row">{r.q}</th>
                     <td className="antes">{r.pred}</td>
                     <td className="antes">{r.range}</td>
-                    <td>
-                      <span className={`rango${r.falla ? " rango--fuera" : ""}`}
-                            style={{ "--v": pos(r.lo, r.hi, r.v),
-                                     "--p": pos(r.lo, r.hi, r.p) } as React.CSSProperties}
-                            role="img"
-                            aria-label={`Rango ${r.range}; volvió ${r.got}: ${r.verdict}`}>
-                        <i className="rango__banda" />
-                        <i className="rango__previo" />
-                        <i className="rango__marca" />
-                      </span>
-                    </td>
+                    <td><Rango r={r} /></td>
                     <td className="vuelta">
                       {r.key ? <span className="despliega">{r.got}</span> : r.got}
                     </td>
@@ -374,8 +405,110 @@ export function Evidence() {
             </li>
             <li>
               Absolutamente nada sobre los 446 servicios ambulatorios que cargan el 73.7% del
-              volumen. No aparecen en ningún informe de camas y son <strong>formalmente no
-              verificables</strong> con los datos en disco.
+              volumen. No aparecen en ningún informe de camas. <strong>Se dijo aquí que eran
+              «formalmente no verificables»; era falso y se retiró</strong> — la ficha siguiente los
+              somete a prueba por otra vía.
+            </li>
+          </ul>
+        </div>
+      </article>
+
+      {/* ---- 4b. the test that did not pass -------------------------------- */}
+      <article className="ficha">
+        <div className="ficha__cabeza">
+          <h3>El otro 74% · abandonos antes del alta</h3>
+          <span className="veredicto">no pasa · falsificada en sentido contrario</span>
+        </div>
+        <div className="ficha__cuerpo">
+          <p>
+            La ficha anterior valida el objetivo contra camas, y las camas solo existen en
+            hospitales. Los 446 servicios ambulatorios quedaban fuera por construcción. El manual
+            oficial del REM define <code>TOTAL DEMANDA</code> como todos los que generaron un DAU{" "}
+            <em>incluidos los que abandonaron antes del alta médica</em> — y ese registro sí existe
+            para SAPU, SAR y SUR. Entonces{" "}
+            <code>demanda − atenciones = personas que se fueron</code>, y hay con qué preguntar.
+          </p>
+          <p>
+            Se pre-registró la predicción, se fijó la regla de decisión, se corrió una vez.{" "}
+            <strong>No pasó.</strong> Y no como un nulo: el contraste salió{" "}
+            <em>significativo en el sentido opuesto</em> al que se había escrito.
+          </p>
+
+          <figure className="registro__caja">
+            <table className="registro">
+              <caption>Lo que se predijo · dónde cayó · lo que volvió</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Cantidad</th>
+                  <th scope="col" className="antes">Se predijo</th>
+                  <th scope="col" className="antes">Rango plausible</th>
+                  <th scope="col"><span className="vsr">Dónde cayó</span></th>
+                  <th scope="col">Volvió</th>
+                  <th scope="col">Veredicto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ABANDONO.map((r) => (
+                  <tr key={r.q}>
+                    <th scope="row">{r.q}</th>
+                    <td className="antes">{r.pred}</td>
+                    <td className="antes">{r.range}</td>
+                    <td><Rango r={r} /></td>
+                    <td className="vuelta">{r.got}</td>
+                    <td className={r.falla ? "falla" : ""}>{r.verdict}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </figure>
+          <p className="pie">
+            Estas filas no llevan marca tenue: el pre-registro fijó una dirección y un rango, nunca
+            un valor puntual. Dibujar uno sería poner en pantalla una predicción que nadie hizo.
+          </p>
+
+          <p>
+            Los cuatro controles placebo — etiqueta permutada dentro de cada servicio y etiqueta
+            desplazada medio año — cruzan el cero en ambos estratos. El instrumento no fabrica
+            efectos; simplemente no encontró el que se esperaba.
+          </p>
+
+          <p className="advertencia">
+            <b>Y la ventana de réplica no existe.</b> El campo <code>TOTAL DEMANDA</code> lo reportan{" "}
+            <strong>cero</strong> servicios en 2017, 2018 y 2019: aparece recién en 2020. La réplica
+            entre épocas era lo que separaba el hallazgo pediátrico de la ficha anterior de una
+            pesca de subgrupos, y aquí <strong>no se puede hacer, ni ahora ni nunca</strong>, con
+            estos datos.
+          </p>
+
+          <h4 className="rotulo">Por qué el signo es negativo</h4>
+          <p>
+            Esto se midió <em>después</em> de ver el resultado y no estaba pre-registrado. El
+            resultado primario es una <em>tasa</em>, y una semana de alza levanta su denominador por
+            definición. Descompuesta: en ambulatorios la demanda total sube{" "}
+            <strong>+0.342 SD</strong> mientras el número de personas que se van no se mueve
+            (+0.020, con intervalo cruzando el cero). Llega más gente, se atiende a más gente, y la
+            proporción que se va baja porque el denominador creció.
+          </p>
+          <p>
+            En <strong>hospitales</strong> ese número sí sube: <strong>+0.06</strong>, intervalo
+            [+0.008, +0.122]. La tensión aparece donde la ficha anterior ya la había encontrado y
+            está ausente donde el producto deliberadamente no alerta.
+          </p>
+
+          <h4 className="rotulo">Lo que este resultado no autoriza</h4>
+          <ul className="limites">
+            <li>
+              <strong>Citar el +0.06 de hospitales como un hallazgo.</strong> Cambia la variable de
+              resultado después de ver fallar la primaria, que es la forma exacta del{" "}
+              <em>outcome switching</em>. Su intervalo empieza en +0.008 y no tiene réplica posible.
+              Es el diseño de un próximo pre-registro, no un resultado.
+            </li>
+            <li>
+              Decir que los servicios ambulatorios «no están tensionados». Se midió un solo canal,
+              sobre un denominador de todas las causas que diluye la señal hacia el nulo.
+            </li>
+            <li>
+              Nada sobre 2025 ni 2026. El archivo diario termina el 31-12-2024.
             </li>
           </ul>
         </div>
@@ -397,10 +530,14 @@ export function Evidence() {
         <h3 className="pliego__titulo">Lo que no sabemos</h3>
         <ul className="ausencias">
           <li>
-            <b>Tres cuartas partes del volumen no son verificables.</b> Los 446 servicios
-            ambulatorios — SAPU, SAR y SUR — cargan el 73.7% de las atenciones respiratorias y no
-            tienen denominador de capacidad en ninguna parte de los datos. Entrenan al modelo y no
-            reciben alertas, porque en un SAPU una alerta no tiene consecuencia.
+            <b>Tres cuartas partes del volumen siguen sin validar, pero ya no por no haberlo
+            intentado.</b> Los 446 servicios ambulatorios — SAPU, SAR y SUR — cargan el 73.7% de las
+            atenciones respiratorias y no tienen denominador de <em>capacidad</em> en ninguna parte
+            de los datos: no tienen camas. Se los probó por el lado de la <em>demanda</em>, con los
+            abandonos antes del alta, y <strong>ese test no pasó</strong>. La frase honesta es
+            «probado el 2026-08-03 y no encontrado», que es peor para el producto y mejor como
+            evidencia. Entrenan al modelo y no reciben alertas, porque en un SAPU una alerta no
+            tiene consecuencia.
           </li>
           <li>
             <b>El objetivo es de todas las edades y la tensión que predice es pediátrica.</b> Si el

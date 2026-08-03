@@ -64,9 +64,21 @@ measured that more data will *not* fix.
 - **Delivery:** a static, read-only web artifact over exported JSON. No backend, no API, no database
   — that design was considered and deleted as heavier than a CPU model refreshed weekly.
 - **Calendar:** the declared Campaña de Invierno spans epidemiological weeks 22–35 and is what makes
-  a mirror shift payable. The monthly roster closes on the 20th–25th of the preceding month —
-  ⚠ **from the 2026-07-29 physician scoping; no public source has been located for this rule**
-  (flagged 2026-08-03). It is load-bearing: it is why base staffing is not a lever.
+  a mirror shift payable.
+- **Rostering — resolved 2026-08-03, and the claim is now narrower than it was.** Base staffing is
+  not a lever because it runs on a **monthly roster cycle**, which needs more notice than a 2-week
+  horizon provides. That much is public: [Ley 19.264](https://www.bcn.cl/leychile/Navegar?idNorma=30631)
+  governs rotating shift systems in Unidades de Emergencia, and
+  [Ley 19.664](https://www.bcn.cl/leychile/navegar?idNorma=155848) delegates the organisation and
+  distribution of shift staffing to the Director del Servicio de Salud **by resolution** — i.e. to
+  each establishment, not to a national calendar.
+  **The specific "20th–25th of the preceding month" comes from the 2026-07-29 physician scoping and
+  has no public source, because there is no national one to find** — it is set per establishment in
+  an internal rostering resolution, a document class that is not centrally published. It *is*
+  obtainable through a Ley de Transparencia request, which is a public and reproducible route.
+  **The date is not load-bearing and the product does not depend on it:** any monthly cycle needs
+  ≥4 weeks of notice, against a measured horizon wall of 3. The conclusion holds for every closing
+  date in the month.
 
 ## Capabilities and Constraints
 
