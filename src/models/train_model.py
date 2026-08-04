@@ -8,7 +8,16 @@ already holds per facility. They are kept for reporting and as the record of tha
 
 Read `demo()` output top to bottom -- it is the argument for every choice below.
 
-Seven things cost real work to learn and must not be undone:
+Eight things cost real work to learn and must not be undone:
+
+* **Every metric in this module is a backtest, and the forecast is `forecast_frame`.** `alert_frame`
+  drops rows on `lvl_fut`, the target week's *observed* level, so its furthest target week is always
+  the last SETTLED week -- until 2026-08-04 the model had never emitted a forecast for a week nobody
+  had seen. "Out-of-sample", "sealed holdout" and "prospective cut" are all accurate and all mean
+  *scored against a known outcome on rows held out of fitting*; none of them means this.
+  `forecast_frame` is the unlabelled row, and it is a **separate function on purpose** -- a
+  `keep_unlabelled` flag on `alert_frame` would put rows with `surge = lvl_fut > thr` = NaN > thr =
+  False into the test split, deflating recall silently. Rule 31.
 
 * **`onset_recall` is the headline, not `recall`.** The aggregate surge metric is 52-64%
   *continuation* of a surge already under way, which a shift coordinator can see from the waiting
@@ -549,12 +558,17 @@ def alert_frame(panel, test_year, h, clim_from=BASELINE_TRAIN_FROM):
             long[long["target_season"] == test_year])
 
 
+def classifier():
+    """The shipped classifier. One definition -- `forecast_frame` must not fit a different model."""
+    return HistGradientBoostingClassifier(
+        max_iter=300, learning_rate=0.06, categorical_features="from_dtype", random_state=0)
+
+
 def stage3_predict(panel, test_year, h, clim_from=BASELINE_TRAIN_FROM, features=DEPLOYED_FEATURES):
     """Fit the surge classifier on training seasons, return the test rows with `prob` attached."""
     train, test = alert_frame(panel, test_year, h, clim_from)
 
-    model = HistGradientBoostingClassifier(
-        max_iter=300, learning_rate=0.06, categorical_features="from_dtype", random_state=0)
+    model = classifier()
     model.fit(train[features], train["surge"])
 
     test = test.copy()
@@ -700,6 +714,88 @@ def write_alert_list(panel, test_year, horizons=HORIZONS, path=ALERT_LIST, hospi
 
     df = pd.concat(out, ignore_index=True).sort_values(
         ["horizon", "week", "score"], ascending=[True, True, False])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path, index=False)
+    return df, path
+
+
+FORECAST = ROOT / "data" / "processed" / "forecast.parquet"
+
+
+def forecast_frame(panel, h):
+    """The row `alert_frame` structurally cannot produce: a target week that has not happened.
+
+    `alert_frame` drops on `lvl_fut` -- the **target week's observed level** -- so its furthest
+    target week is always the last SETTLED week, and until this function existed the model had
+    never emitted a forecast for a week nobody had seen. Measured 2026-08-04: furthest target
+    week 29 at both horizons, against a last settled week of 29. Rule 31.
+
+    Here the label is simply absent. Features are read at the last settled week `origin`; the
+    target week is `origin + h`; nothing is scored against an outcome, because there is none.
+
+    **A separate function, never a flag on `alert_frame`.** An unlabelled row reaching the
+    train/test split there would be counted in every metric this module asserts -- `surge` is
+    `lvl_fut > thr`, which is False, not missing, when `lvl_fut` is NaN. Silent, and in the
+    direction that inflates nothing and deflates recall.
+
+    The model and the cut are the shipped ones: fitted on seasons strictly before the target
+    season (AC4), cut fixed on the season before it, exactly as `write_alert_list` does.
+    `demo()` asserts the scores reconcile with `stage3_predict` to 1e-12 on a rolled-back panel.
+    """
+    origin = int(panel["t"].max())
+    target = origin + h
+    season = int(BASE_YEAR + target // 52)
+    week = int(target % 52 + 1)
+
+    train, _ = alert_frame(panel, season, h)
+    model = classifier().fit(train[DEPLOYED_FEATURES], train["surge"])
+
+    rank_rows = panel[panel["Anio"].isin(
+        train_years_for(panel, season, since=BASELINE_TRAIN_FROM))]
+    p = standardize(panel, rank_rows["Anio"].unique())
+    Z = (p.pivot_table(index="t", columns="EstablecimientoCodigo", values="z")
+         .reindex(range(int(panel["t"].min()), origin + 1)))
+
+    row = pd.DataFrame({"z": Z.loc[origin], "z_l1": Z.loc[origin - 1], "z_l2": Z.loc[origin - 2],
+                        "z_d4": Z.loc[origin] - Z.loc[origin - 4]})
+    # `clim_fut` cannot be shifted into place the way `alert_frame` does it -- there is no target
+    # row to shift from. It is a lookup on the same object instead: the facility's own climatology
+    # for that week of year, over the same training seasons. Identical value, reachable one week
+    # early. This is the only line where the two paths differ, which is why demo() reconciles them.
+    clim = (rank_rows[rank_rows["SemanaEstadistica"] == week]
+            .groupby("EstablecimientoCodigo")[Y].mean())
+    row["clim_z"] = ((clim - rank_rows.groupby("EstablecimientoCodigo")[Y].mean())
+                     / p.groupby("EstablecimientoCodigo")["scale"].first())
+    row["week"] = week
+    row = row.dropna(subset=DEPLOYED_FEATURES)
+
+    cal = stage3_predict(panel, season - 1, h)[1]
+    cut = float(cal["prob"].quantile(1 - ALERT_SHARE))
+    score = model.predict_proba(row[DEPLOYED_FEATURES])[:, 1]
+    return pd.DataFrame({
+        "facility": row.index.to_numpy(),
+        "origin_year": int(BASE_YEAR + origin // 52), "origin_week": int(origin % 52 + 1),
+        "year": season, "week": week, "horizon": h,
+        "score": score, "cut": cut, "alert": score >= cut,
+    }).sort_values("score", ascending=False, ignore_index=True)
+
+
+def write_forecast(panel, horizons=HORIZONS, path=FORECAST):
+    """The live forecast as a file: one row per (facility, horizon), for a week nobody has seen.
+
+    **A different file from `alert_list.parquet`, and deliberately without its `observed_*`
+    columns.** The alert list is a finished season with the outcome beside every alert; this is a
+    claim about a week that has not happened. Two columns full of nulls would say that less
+    clearly, and one file holding both would let a consumer read a backtest as a forecast, which
+    is the exact confusion that made rule 31 necessary. The absence of the columns *is* the
+    statement.
+
+    Hospital ERs only, with no switch to turn that off: an ambulatory SAPU/SAR has no lever to pull
+    on an alert (2026-07-29), so a forecast for one is not a narrower product, it is noise.
+    `write_alert_list` keeps its `hospital_only` flag because it reproduces published figures.
+    """
+    panel = scope_panel(panel, hospital_er_facilities(panel))
+    df = pd.concat([forecast_frame(panel, h) for h in horizons], ignore_index=True)
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(path, index=False)
     return df, path
@@ -963,6 +1059,50 @@ def demo():
     alert_list, path = write_alert_list(panel, 2025)
     print(f"{len(alert_list):,} rows -> {path.relative_to(ROOT).as_posix()}")
     print(alert_list.head(4).to_string(index=False))
+
+    print("\n\nTHE FORECAST FRAME -- a target week nobody has seen  [rule 31, AC-I7 prerequisite]")
+    print("Everything above this line is a backtest: `alert_frame` drops rows on `lvl_fut`, the")
+    print("target week's OBSERVED level, so its furthest target week is always the last settled")
+    print("one. These rows have no label because the week has not happened.")
+    settled = int(ueh["t"].max())
+    settled_key = (BASE_YEAR + settled // 52) * 100 + settled % 52 + 1
+    for h in HORIZONS:
+        f = forecast_frame(ueh, h)
+        assert (f["year"] * 100 + f["week"] > settled_key).all(), \
+            "the forecast is not ahead of the settled panel -- this is the bug rule 31 describes"
+
+        # The reconciliation, and it is the whole check: roll the panel back h weeks so the
+        # target week is one the supervised path CAN score, and demand the same number. The two
+        # paths reach `clim_fut` differently -- a shift there, a lookup here -- and this is what
+        # would catch them diverging. Anything but an exact match means the served forecast is
+        # not the model whose out-of-sample figures this module prints.
+        back = forecast_frame(ueh[ueh["t"] <= settled - h].copy(), h)
+        sup = stage3_predict(ueh, int(back["year"].iloc[0]), h)[1]
+        sup = sup[sup["week"] == int(back["week"].iloc[0])]
+        m = back.merge(sup[["EstablecimientoCodigo", "prob"]], left_on="facility",
+                       right_on="EstablecimientoCodigo")
+        gap = (m["score"] - m["prob"]).abs().max()
+        assert len(m) == len(sup), f"h={h}: the forecast misses {len(sup) - len(m)} scored rows"
+        assert gap < 1e-12, f"h={h}: forecast and supervised paths disagree by {gap:.2e}"
+
+        n_scope = ueh["EstablecimientoCodigo"].nunique()
+        print(f"\nh={h}  origin {f['origin_year'].iloc[0]} w{f['origin_week'].iloc[0]} -> target "
+              f"{f['year'].iloc[0]} w{f['week'].iloc[0]}  ·  {len(f)} of {n_scope} facilities, "
+              f"{int(f['alert'].sum())} alerted at cut {f['cut'].iloc[0]:.3f}")
+        print(f"      reconciles with stage3_predict on {len(m)} rolled-back rows, "
+              f"max |diff| {gap:.1e}")
+        print(f.head(3).to_string(index=False))
+
+    fc, fpath = write_forecast(panel)
+    # The facilities with no forecast are not a rounding error and the live screen may not render
+    # them as calm: a facility missing the origin week or one of its lags has no features, so it
+    # gets no row. Five hospital ERs are scored on NON-CONTIGUOUS weeks (explorer, 2026-08-02) and
+    # they are most of this list -- including 129103, the one genuine miss the audit found.
+    silent = sorted(set(ueh["EstablecimientoCodigo"]) - set(fc["facility"]))
+    print(f"\n{len(fc)} rows -> {fpath.relative_to(ROOT).as_posix()}")
+    print(f"NO FORECAST for {len(silent)} of {ueh['EstablecimientoCodigo'].nunique()} hospital ERs "
+          f"-- missing the origin week or a lag: {silent}")
+    print("      AC-I8: these must render as `sin dato`, never as calm.")
 
     print("\nOK  no regression against the measured leak-free baseline")
     print("OK  AC2 baseline stable -- Stage 3 must beat recall "

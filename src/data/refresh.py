@@ -1,4 +1,4 @@
-"""The weekly refresh: pull the DEIS release, re-run the alert list and the export, stamp the date.
+"""The weekly refresh: pull the DEIS release, re-run the alert list, the forecast and the export.
 
 `context/specs/alert-interface.md` AC-I9. Run it from cron, Task Scheduler or a CI workflow --
 **not** from a service. The decision log deleted the Redis + FastAPI design on 2026-07-27 because a
@@ -134,12 +134,23 @@ def rebuild(season=None):
     Imported inside the function rather than at module scope: `--check` must run without the model.
     """
     from src.models.export_frontend import export
-    from src.models.train_model import load_panel, write_alert_list
+    from src.models.train_model import load_panel, write_alert_list, write_forecast
 
     panel = load_panel()                      # trims the unsettled tail -- the short-week refusal
     season = season or served_season(int(panel["Anio"].max()))
     _, path = write_alert_list(panel, season)
     print(f"OK  alert list -> {path.name}, season {season}")
+
+    # The forecast is the only artifact here about a week that has not happened, and it is written
+    # every run precisely because it expires every week: a stale forecast.parquet is a claim about
+    # a week whose answer is already in. The alert list above is a finished season and does not
+    # rot the same way.
+    fc, fpath = write_forecast(panel)
+    tgt = fc.groupby("horizon").first()
+    print(f"OK  forecast -> {fpath.name}, origin {tgt['origin_year'].iloc[0]} "
+          f"w{tgt['origin_week'].iloc[0]} -> "
+          + ", ".join(f"h={h} w{r['week']} ({int(fc[fc['horizon'] == h]['alert'].sum())} alerts)"
+                      for h, r in tgt.iterrows()))
     return export()
 
 
