@@ -133,8 +133,10 @@ def rebuild(season=None):
 
     Imported inside the function rather than at module scope: `--check` must run without the model.
     """
-    from src.models.export_frontend import export
-    from src.models.train_model import load_panel, write_alert_list, write_forecast
+    from src.models.export_frontend import export, export_live
+    from src.models.train_model import (
+        ALERT_LIST_LIVE, load_panel, write_alert_list, write_forecast,
+    )
 
     panel = load_panel()                      # trims the unsettled tail -- the short-week refusal
     season = season or served_season(int(panel["Anio"].max()))
@@ -151,7 +153,15 @@ def rebuild(season=None):
           f"w{tgt['origin_week'].iloc[0]} -> "
           + ", ".join(f"h={h} w{r['week']} ({int(fc[fc['horizon'] == h]['alert'].sum())} alerts)"
                       for h, r in tgt.iterrows()))
-    return export()
+
+    # The current season, for the weeks BEHIND the now-line on the live screen. Separate from the
+    # served season above: rolling the explorer from a finished 2025 to a partial 2026 changes what
+    # the product IS, and this does not do that -- it adds a second artifact for a second screen.
+    current = int(panel["Anio"].max())
+    _, live_list = write_alert_list(panel, current, path=ALERT_LIST_LIVE)
+    print(f"OK  current-season alert list -> {live_list.name}, season {current}")
+    export()
+    return export_live()
 
 
 def refresh(force=False, export=True):

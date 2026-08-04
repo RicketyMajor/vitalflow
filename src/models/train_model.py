@@ -670,6 +670,12 @@ def reliability(prob, truth, bins=10):
 
 
 ALERT_LIST = ROOT / "data" / "processed" / "alert_list.parquet"
+# The CURRENT season's list, kept apart from the one above on purpose. `alert_list.parquet` is the
+# finished season the explorer renders and its value is the outcome beside the alert; this one is
+# the season in progress, which the live screen reads for the weeks BEHIND the now-line. One file
+# holding both would force every consumer to filter, and the first consumer to forget is the one
+# that turns the explorer into a screen that lies about what it shows.
+ALERT_LIST_LIVE = ROOT / "data" / "processed" / "alert_list_current.parquet"
 
 
 def write_alert_list(panel, test_year, horizons=HORIZONS, path=ALERT_LIST, hospital_only=True):
