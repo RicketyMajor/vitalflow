@@ -161,6 +161,25 @@ a:focus-visible, [tabindex]:focus-visible, input:focus-visible, button:focus-vis
 .semana--alza.semana--alertada::after { content: ""; position: absolute; left: 0; right: 0; top: 0;
                                         height: 8px; border-radius: 1px 1px 0 0;
                                         background: var(--tinta); }
+
+/* The now-line. Everything to its left happened; everything to its right is claimed or unwatched.
+   1px --tenue in the 2px gutter, NOT the accent: the boundary between the observed and the claimed
+   is not a model output. `.horizonte` names the two weeks; this draws the gap between them. */
+.semana--ahora::before { content: ""; position: absolute; right: -2px; top: -6px; bottom: -5px;
+                         width: 1px; background: var(--tenue); }
+
+/* FILLED = IT HAPPENED · OUTLINED = IT IS CLAIMED.  (alert-interface.md, 2026-08-04)
+   This SUPERSEDES the maquette's `.semana--objetivo`, which was solid --alerta with an offset
+   outline: solid reads as a fact, and the target week is the only cell on screen asserting
+   something about the future. One ink, a third geometric axis, no new colour. */
+.semana--objetivo { background: var(--hueco); height: 34px;
+                    border: 1px solid var(--alerta); }
+/* No alert, or an expired forecast: the week is still marked, without the ink that means
+   "the model spoke". */
+.semana--objetivo-calma { background: var(--hueco); height: 34px;
+                          border: 1px solid var(--borde); }
+.llave--objetivo { background: var(--hueco); outline: 1px solid var(--alerta); }
+.llave--objetivo-calma { background: var(--hueco); outline: 1px solid var(--borde); }
 .cinta__eje { display: flex; justify-content: space-between; font-family: var(--mono);
               font-size: 10.5px; color: var(--tenue); letter-spacing: 0.04em;
               font-variant-numeric: tabular-nums; }
