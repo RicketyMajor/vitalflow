@@ -3,8 +3,11 @@
    must not congratulate a facility that was never warned. */
 
 import assert from "node:assert/strict";
-import type { Facility } from "./data.ts";
-import { axisWeeks, freshness, runs, seasonLength, summarize, verdict } from "./season.ts";
+import type { Claim, Facility, Live } from "./data.ts";
+import {
+  axisWeeks, claimOf, freshness, liveState, liveVerdict, ordinal, runs, seasonLength, summarize,
+  verdict,
+} from "./season.ts";
 
 // 105107's real shape: 37 scored weeks scattered between week 1 and week 49.
 const sparse = [1, 2, 3, 20, 21, 49];
@@ -60,4 +63,35 @@ assert.deepEqual(freshness("2026-08-03", day(9)), { dias: 9, viejo: true },
 assert.deepEqual(freshness("2026-08-03", day(-2)), { dias: 0, viejo: false },
   "a stamp in the future is a clock disagreement, never negative age");
 
-console.log("OK  season.ts: week-space runs, axis, summary, verdict and the AC-I9 stamp");
+// ---- the live screen ------------------------------------------------------------------------
+const live = (forecast: Claim[], stamp = "2026-08-04"): Live => ({
+  ...facility([28, 29], [100, 110], [0, 0], [0, 0]),
+  retrospective: false, origin: [2026, 29], stamp, forecast,
+});
+const aviso: Claim = { horizon: 2, week: 31, alert: 1, rank: 2, of: 31 };
+const calmo: Claim = { horizon: 2, week: 31, alert: 0, rank: 19, of: 31 };
+const hoy = new Date("2026-08-04T00:00:00");
+
+assert.equal(liveState(live([aviso]), hoy), "aviso");
+assert.equal(liveState(live([calmo]), hoy), "calma");
+assert.equal(liveState(live([]), hoy), "sin-dato");
+// Staleness outranks the alert. A three-week-old "alza probable" names a week already past.
+assert.equal(liveState(live([aviso], "2026-07-01"), hoy), "vencido",
+  "an expired forecast must not be presented as a current alert");
+// `sin dato` must not be dressed as calm — the word would claim a week nobody observed was quiet.
+assert.doesNotMatch(liveVerdict(live([]), "sin-dato", null)[0], /calma/i,
+  "a facility with no forecast must not read as a calm season");
+assert.equal(claimOf(live([{ ...aviso, horizon: 1, week: 30 }, aviso]))!.week, 31,
+  "only h=2 reaches the screen");
+assert.equal(ordinal(2), "2ª");
+
+// AC-I8 case (a): a facility with no scored week at all. It reaches the browser as empty arrays,
+// so every consumer of them has to survive it — `seasonLength([])` is the one that would throw.
+const vacio: Live = { ...live([]), weeks: [], attentions: [], surge: [], onset: [],
+                      h1: { alert: [], rank: [] }, h2: { alert: [], rank: [] } };
+assert.equal(seasonLength(vacio.weeks), 52, "an empty season still spans 52 weeks");
+assert.equal(summarize(vacio).watched, 0);
+assert.equal(liveState(vacio, hoy), "sin-dato");
+
+console.log("OK  season.ts: week-space runs, axis, summary, verdict, the AC-I9 stamp and the " +
+            "four live states");

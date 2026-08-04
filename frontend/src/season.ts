@@ -3,7 +3,7 @@
    facilities are scored on non-contiguous weeks, and indexing by array position drew twelve missing
    weeks as none at all. */
 
-import type { Facility } from "./data";
+import type { Claim, Facility, Live } from "./data";
 
 export const CAMPAIGN: [number, number] = [22, 35];   // Campaña de Invierno, as declared
 
@@ -67,6 +67,56 @@ export function summarize(f: Facility): Summary {
       null as number | null,
     ),
   };
+}
+
+/* ---- the live screen: a claim about a week that has not happened ------------------------- */
+
+/** «la semana» is feminine: 2ª, never 2°. */
+export const ordinal = (n: number) => `${n}ª`;
+
+/** Only h=2 reaches the screen. h=1 targets the week that is still settling — a horizon the
+ *  deployment does not have (2026-07-28) — and it stays in the file, off screen, exactly as the
+ *  explorer keeps it. */
+export const claimOf = (f: Live, horizon = 2): Claim | null =>
+  f.forecast.find((c) => c.horizon === horizon) ?? null;
+
+export type LiveState = "vencido" | "sin-dato" | "aviso" | "calma";
+
+/** The live screen's state, in precedence order.
+ *
+ *  `vencido` OUTRANKS everything, including an alert: a forecast whose export is older than one
+ *  DEIS publication cycle is a claim about a week that has probably already happened, and
+ *  rendering it as current is the same lie as a live screen with no refresh job behind it. */
+export function liveState(f: Live, today = new Date()): LiveState {
+  if (freshness(f.stamp, today).viejo) return "vencido";
+  const c = claimOf(f);
+  if (!c) return "sin-dato";
+  return c.alert ? "aviso" : "calma";
+}
+
+/** Headline and gloss. `sin-dato` must never read as calm — the calm screen says "watched,
+ *  nothing found", and here nobody watched. */
+export function liveVerdict(f: Live, state: LiveState, c: Claim | null): [string, string] {
+  const [, semana] = f.origin;
+  if (state === "vencido") {
+    const { dias } = freshness(f.stamp);
+    return ["Pronóstico vencido",
+      `El último pronóstico publicado apunta a la semana ${c ? c.week : semana + 2} y se generó ` +
+      `hace ${dias} días. El refresco semanal no se ha ejecutado, así que esta pantalla no ` +
+      `afirma nada sobre la semana en curso.`];
+  }
+  if (state === "sin-dato")
+    return ["Sin pronóstico esta semana",
+      `Este servicio no reportó la semana ${semana} o alguna de las anteriores que el modelo ` +
+      `necesita, así que no hay nada que pronosticar. No es una temporada en calma: es una ` +
+      `semana que nadie observó.`];
+  if (state === "calma")
+    return ["Sin aviso",
+      `La semana ${c!.week} no aparece entre las de mayor demanda esperada para este servicio. ` +
+      `Es el estado más frecuente del sistema: 94% de las semanas-servicio no llevan aviso.`];
+  return ["Alza probable",
+    `La semana ${c!.week} quedaría entre las de mayor demanda esperada para este servicio, por ` +
+    `encima de su propio umbral histórico.`];
 }
 
 /** The retrospective verdict. Deliberately unaccented: the institutional ink means "the model

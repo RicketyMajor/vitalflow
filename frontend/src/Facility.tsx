@@ -77,6 +77,8 @@ export function Facility({ f }: { f: F }) {
         </div>
       </article>
 
+      <p className="nota"><a href={`#/${f.code}/ahora`}>Ver el pronóstico de esta semana →</a></p>
+
       <p className="nota nota--pie">
         Esta pantalla muestra una temporada que ya ocurrió, y por eso puede poner el resultado al
         lado del aviso. El producto en operación no puede: la semana evaluada todavía no sucede y

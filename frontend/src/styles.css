@@ -235,6 +235,23 @@ a:focus-visible, [tabindex]:focus-visible, input:focus-visible, button:focus-vis
 .hecho small { color: var(--rotulo); font-family: var(--prosa); font-size: 12.5px;
                line-height: 1.45; text-wrap: pretty; }
 
+/* ---- levers, only shown when there is something to act on (AC-I5) --------- */
+.palancas { border-top: 1px solid var(--borde-int); padding: calc(var(--u) * 5);
+            display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
+.palancas h3 { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.12em;
+               text-transform: uppercase; color: var(--tenue); font-weight: 500; }
+.palancas ol { display: flex; flex-direction: column; gap: calc(var(--u) * 2.5);
+               list-style: none; }
+.palancas li { display: flex; gap: calc(var(--u) * 3); align-items: baseline; }
+.palancas li b { font-family: var(--mono); font-size: 12px; color: var(--alerta);
+                 font-weight: 600; flex: 0 0 auto; }
+.palancas li span { color: var(--tinta); }
+.palancas li i { font-style: normal; color: var(--tenue); }
+.descartada { border-top: 1px dashed var(--borde-int); padding-top: calc(var(--u) * 3);
+              color: var(--tenue); font-size: 12.5px; max-width: 62ch;
+              text-wrap: pretty; }
+.descartada b { color: var(--rotulo); font-weight: 600; }
+
 /* ---- vigilance footer ----------------------------------------------------- */
 .vigilancia { border-top: 1px solid var(--borde-int);
               padding: calc(var(--u) * 4) calc(var(--u) * 5); display: flex; flex-wrap: wrap;
