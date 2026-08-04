@@ -55,5 +55,19 @@ function load<T>(path: string): Promise<T> {
   return hit as Promise<T>;
 }
 
+/** What the model claims about a week nobody has seen. `rank` of `of` is the ONLY quantity the
+    interface may show about it — a probability was measured and rejected (AC-I2). */
+export type Claim = { horizon: number; week: number; alert: number; rank: number; of: number };
+
+export type Live = Facility & {
+  /** The last settled week the claim was computed from: `[year, week]`. */
+  origin: [number, number];
+  /** When the export ran. The claim dates itself: a forecast whose origin is weeks old is a
+      statement about a week that has already happened, and the screen must refuse it. */
+  stamp: string;
+  forecast: Claim[];
+};
+
 export const loadIndex = () => load<Index>("data/facilities.json");
 export const loadFacility = (code: string) => load<Facility>(`data/facility/${code}.json`);
+export const loadLive = (code: string) => load<Live>(`data/live/${code}.json`);

@@ -4,11 +4,12 @@
 
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { loadFacility, loadIndex } from "./data";
-import type { Facility as F, Index } from "./data";
+import { loadFacility, loadIndex, loadLive } from "./data";
+import type { Facility as F, Index, Live as L } from "./data";
 import { Evidence } from "./Evidence";
 import { Explorer } from "./Explorer";
 import { Facility } from "./Facility";
+import { Live } from "./Live";
 import { freshness } from "./season";
 import "./styles.css";
 
@@ -36,8 +37,9 @@ function useAsync<T>(fn: () => Promise<T>, key: string) {
 }
 
 function App() {
-  const path = useHash().replace(/^\//, "");
-  const evidencia = path === "evidencia";
+  // `#/<code>` the finished season · `#/<code>/ahora` the week that has not happened.
+  const [head, tail] = useHash().replace(/^\//, "").split("/");
+  const evidencia = head === "evidencia";
   // Shares the promise `ExplorerRoute` uses — `data.ts` caches by path, so this costs no fetch on
   // `#/` and one cached 39 KB index elsewhere. The stamp belongs on every route: a stale reading is
   // not less stale for having been reached through a facility link.
@@ -53,12 +55,14 @@ function App() {
         </p>
         {index && <Sello index={index} />}
         <nav>
-          <a href="#/" aria-current={path ? undefined : "page"}>Todos los servicios</a>
+          <a href="#/" aria-current={head ? undefined : "page"}>Todos los servicios</a>
           <a href="#/evidencia" aria-current={evidencia ? "page" : undefined}>Evidencia</a>
         </nav>
       </header>
 
-      {evidencia ? <Evidence /> : path ? <FacilityRoute code={path} /> : <ExplorerRoute />}
+      {evidencia ? <Evidence />
+        : head ? (tail === "ahora" ? <LiveRoute code={head} /> : <FacilityRoute code={head} />)
+        : <ExplorerRoute />}
     </div>
   );
 }
@@ -94,6 +98,15 @@ function FacilityRoute({ code }: { code: string }) {
   if (error) return <p className="cargando">No hay datos para el servicio {code}.</p>;
   if (!data) return <p className="cargando">Cargando servicio {code}…</p>;
   return <Facility f={data} />;
+}
+
+/** The live screen. Its own route over its own file, not a mode on the facility screen: the two
+    views answer different questions and a toggle between them is how one of them starts lying. */
+function LiveRoute({ code }: { code: string }) {
+  const { data, error } = useAsync<L>(() => loadLive(code), `live-${code}`);
+  if (error) return <p className="cargando">No hay pronóstico publicado para el servicio {code}.</p>;
+  if (!data) return <p className="cargando">Cargando servicio {code}…</p>;
+  return <Live f={data} />;
 }
 
 createRoot(document.getElementById("root")!).render(
