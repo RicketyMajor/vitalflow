@@ -116,11 +116,23 @@ def install(candidate, dest):
 
 
 def served_season(default):
-    """The season `alert_list.parquet` is currently built for, or `default` if there is none."""
+    """The season `alert_list.parquet` is currently built for, or `default` if there is none.
+
+    **The tracked export is consulted before falling back**, and that is not a nicety: it is what
+    makes this function work off a dev machine. `data/processed/` is gitignored, so on a CI
+    checkout `ALERT_LIST` is always absent and `default` -- the newest year in the panel -- would
+    silently roll the explorer from a finished 2025 season to a partial 2026 one on the very first
+    scheduled run. That is the exact side effect `rebuild` says a download must never have. The
+    guard was correct and was implemented by reading a file that only exists where the code had so
+    far run (rule 37, second instance). `facilities.json` records the same season and IS tracked.
+    """
     from src.models.train_model import ALERT_LIST
-    if not ALERT_LIST.exists():
-        return default
-    return int(pd.read_parquet(ALERT_LIST, columns=["year"])["year"].iloc[0])
+    if ALERT_LIST.exists():
+        return int(pd.read_parquet(ALERT_LIST, columns=["year"])["year"].iloc[0])
+    index = ROOT / "frontend" / "public" / "data" / "facilities.json"
+    if index.exists():
+        return int(json.loads(index.read_text(encoding="utf-8"))["season"])
+    return default
 
 
 def rebuild(season=None):

@@ -1,0 +1,73 @@
+# The weekly refresh, scheduled.
+#
+# `src/data/refresh.py` has existed since 2026-08-04 and had never been run by anything but a hand.
+# That was tolerable while the site only ran from a dev machine. Since 2026-08-06 the 360 exported
+# payloads are tracked, so the committed snapshot ages on its own clock: past eight days the `Sello`
+# tells a visitor "sin actualizar hace N días, el refresco semanal no se ha ejecutado" — true, and
+# indistinguishable from broken to someone who does not know the design. This is the job that keeps
+# that sentence false.
+#
+# It is a scheduled batch, never a service. That architecture was measured and rejected 2026-07-27
+# and its scaffolding deleted 2026-08-04; a CPU model refreshed weekly does not need one.
+#
+# ⚠ GitHub disables scheduled workflows after 60 days with no repository activity. If the site goes
+# stale and nothing here failed, check that first — the `Sello` will already be saying so on screen.
+
+name: refresco semanal
+
+on:
+  # Tuesday. The DEIS week closes Saturday and is 19.1% complete that day, ~97.8% after seven; the
+  # exact hour does not matter because `load_weekly_target` refuses to serve an unsettled week
+  # regardless. What matters is running more often than the eight days at which the stamp goes red.
+  schedule:
+    - cron: "17 11 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Two runs pushing payloads at once would race on the same 361 files.
+concurrency:
+  group: refresco
+  cancel-in-progress: false
+
+jobs:
+  refrescar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # the model is ~9 min on a laptop; the download is ~67 MB
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Deliberately not `requirements.txt`. That file also declares jupyter, nbconvert, ipykernel,
+      # matplotlib, ydata-profiling, sweetviz, dtale, geopy and pypdf — none of which any module on
+      # this path imports. These four are what the pipeline actually runs on.
+      - name: dependencias del pipeline
+        run: pip install pandas duckdb pyarrow scikit-learn
+
+      # No network, no model: it exercises the download guards against synthetic parquets. If the
+      # backwards-snapshot or truncated-download refusals ever break, this fails before the job has
+      # touched the served data.
+      - name: auto-chequeo de las guardas
+        run: python src/data/refresh.py --check
+
+      # Downloads, validates in a temp file, installs only if it passes and differs, then re-runs
+      # the alert list, the forecast, the current-season list and both exports.
+      - name: refrescar desde DEIS
+        run: python src/data/refresh.py
+
+      - name: publicar los payloads
+        run: |
+          git config user.name "vitalflow-refresh"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/public/data
+          if git diff --cached --quiet; then
+            echo "sin cambios — DEIS no publicó revisiones que muevan el export"
+          else
+            git commit -m "chore: weekly DEIS refresh — alert list, forecast and exported payloads"
+            git push
+          fi
