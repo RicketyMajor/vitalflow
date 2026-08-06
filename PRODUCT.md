@@ -20,9 +20,13 @@ Explicitly **not** the users: a clinician at the bedside, a MINSAL analyst, the 
 SAPU/SAR (ambulatory unit) an alert has zero consequence, which is why 446 facilities carrying 73.7%
 of respiratory attentions are training rows and not alert recipients.
 
-**A second audience exists for the evidence surface only** (confirmed 2026-08-02): someone auditing
-the method — a reviewer, a committee, MINSAL. That surface is layered so both read the same page at
-two depths. It does not change who the product is for.
+**A second audience exists for the evidence and landing surfaces only** (evidence confirmed
+2026-08-02; the landing added 2026-08-06): someone **auditing or judging the method** — a reviewer,
+a committee, MINSAL. The evidence page is layered so both audiences read it at two depths. The
+landing at `#/` is written for this audience alone: it is the project's **refusals**, nine of them,
+each with the measurement that forced it. **Neither changes who the product is for.** They exist
+because a public URL is opened by whoever has the link, and until AC-I10 moves off zero that is
+never the coordinator.
 
 ## Product Purpose
 
