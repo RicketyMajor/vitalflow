@@ -1,4 +1,5 @@
-/* Hash routing, ~30 lines and no dependency. Two routes: `#/` the explorer, `#/<code>` a facility.
+/* Hash routing, ~30 lines and no dependency. `#/` the landing, `#/servicios` the explorer,
+   `#/<code>` a facility, `#/<code>/ahora` its live forecast, `#/evidencia` the ledger.
    Hash rather than history so a static build deploys under any path with no server rewrite, and so
    a facility is deep-linkable — which is the only reason to have a router here at all. */
 
@@ -9,6 +10,7 @@ import type { Facility as F, Index, Live as L } from "./data";
 import { Evidence } from "./Evidence";
 import { Explorer } from "./Explorer";
 import { Facility } from "./Facility";
+import { Landing } from "./Landing";
 import { Live } from "./Live";
 import { freshness } from "./season";
 import "./styles.css";
@@ -40,29 +42,38 @@ function App() {
   // `#/<code>` the finished season · `#/<code>/ahora` the week that has not happened.
   const [head, tail] = useHash().replace(/^\//, "").split("/");
   const evidencia = head === "evidencia";
-  // Shares the promise `ExplorerRoute` uses — `data.ts` caches by path, so this costs no fetch on
-  // `#/` and one cached 39 KB index elsewhere. The stamp belongs on every route: a stale reading is
-  // not less stale for having been reached through a facility link.
+  const servicios = head === "servicios";
+  // The landing owns its first viewport, so the shared masthead is suppressed there — a preamble
+  // above a thesis is a preamble, and the page carries its own marca and its own stamp line.
+  const portada = !head;
+  // Shares the promise `ExplorerRoute` uses — `data.ts` caches by path, so this costs one cached
+  // 39 KB index across every route. The stamp belongs on all of them: a stale reading is not less
+  // stale for having been reached through a facility link.
   const { data: index } = useAsync<Index>(loadIndex, "index");
 
   return (
-    <div className="hoja">
-      <header className="encabezado">
-        <h1>VitalFlow · explorador de servicios</h1>
-        <p>
-          Demanda respiratoria semanal en las 180 urgencias hospitalarias del país, contra el propio
-          umbral de cada servicio. Se puede ver al modelo acertar y se puede ver fallar.
-        </p>
-        {index && <Sello index={index} />}
-        <nav>
-          <a href="#/" aria-current={head ? undefined : "page"}>Todos los servicios</a>
-          <a href="#/evidencia" aria-current={evidencia ? "page" : undefined}>Evidencia</a>
-        </nav>
-      </header>
+    <div className={portada ? "hoja hoja--portada" : "hoja"}>
+      {!portada && (
+        <header className="encabezado">
+          <h1><a href="#/">VitalFlow</a> · explorador de servicios</h1>
+          <p>
+            Demanda respiratoria semanal en las 180 urgencias hospitalarias del país, contra el propio
+            umbral de cada servicio. Se puede ver al modelo acertar y se puede ver fallar.
+          </p>
+          {index && <Sello index={index} />}
+          <nav>
+            <a href="#/">Portada</a>
+            <a href="#/servicios" aria-current={servicios ? "page" : undefined}>Todos los servicios</a>
+            <a href="#/evidencia" aria-current={evidencia ? "page" : undefined}>Evidencia</a>
+          </nav>
+        </header>
+      )}
 
-      {evidencia ? <Evidence />
-        : head ? (tail === "ahora" ? <LiveRoute code={head} /> : <FacilityRoute code={head} />)
-        : <ExplorerRoute />}
+      {portada ? <Landing index={index} />
+        : evidencia ? <Evidence />
+        : servicios ? <ExplorerRoute />
+        : tail === "ahora" ? <LiveRoute code={head} />
+        : <FacilityRoute code={head} />}
     </div>
   );
 }
