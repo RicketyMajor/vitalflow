@@ -103,7 +103,12 @@ def season_payload(code, g, obs, p90):
 
 
 def build(path=ALERT_LIST):
-    """Returns `(index, {code: payload})` — everything the explorer needs, still in memory."""
+    """Returns `(index, {code: payload}, nacional)` — everything the site needs, still in memory.
+
+    The national payload is built here rather than by its own entry point because `load_panel()`
+    below is the expensive call and both readings come off the same frame. Two entry points would
+    load the panel twice and, worse, could load two different ones.
+    """
     alerts = pd.read_parquet(path)
     season = int(alerts["year"].iloc[0])
     assert alerts["year"].nunique() == 1, "one season per export; re-run write_alert_list per year"
@@ -138,8 +143,62 @@ def build(path=ALERT_LIST):
             "surges": int(h2["observed_surge"].sum()),
         })
 
-    return ({"season": season, "retrospective": True, **release_stamp(panel),
-             "facilities": index}, payloads)
+    index = {"season": season, "retrospective": True, **release_stamp(panel), "facilities": index}
+    return index, payloads, build_nacional(panel, season, index)
+
+
+SEASON_WEEKS = 52  # week 53 is a DEIS bucket the canonical loader excludes -- see refresh.coverage
+
+
+def build_nacional(panel, season, index):
+    """The season as the country saw it: every region, north to south, by epidemiological week.
+
+    Written for the portada (`specs/portada.md`), and the reason its figures are not hand-written.
+    Everything the page states about scale -- how many services, how many regions, how many weeks
+    crossed a threshold -- is read from here, so a re-pin of the model or a DEIS revision moves the
+    page instead of silently disagreeing with it. That is backlog item G solved by construction on
+    one surface; `#/metodo` and `#/evidencia` remain hand-written and remain the open half.
+
+    **Raw weekly totals are exported, never a normalised one.** The portada draws each region
+    against its own peak week -- the Metropolitana has 24 hospital ERs and Arica has one, so raw
+    counts side by side would draw the size of the region rather than the wave -- but that is a
+    drawing decision and it belongs with the drawing. A payload that had already divided could not
+    answer any other question.
+
+    **The north-to-south order is derived, not typed.** DEIS facility codes carry a north-to-south
+    prefix, so the smallest code in a region places it along the country. A hand-written list of
+    sixteen regions would be one more constant to keep true, and it would be wrong the first time
+    DEIS renames one.
+    """
+    rows = panel[panel["Anio"] == season]
+    weeks = list(range(1, SEASON_WEEKS + 1))
+
+    # `min` of the code, not `count`: order is geography here, not size.
+    orden = (rows.groupby("RegionGlosa")["EstablecimientoCodigo"].min().sort_values().index)
+    servicios = rows.groupby("RegionGlosa")["EstablecimientoCodigo"].nunique()
+    por_semana = rows.groupby(["RegionGlosa", "SemanaEstadistica"])[Y].sum()
+
+    regiones = []
+    for nombre in orden:
+        s = por_semana.loc[nombre].reindex(weeks)
+        regiones.append({
+            "nombre": nombre,
+            "servicios": int(servicios[nombre]),
+            # `None`, not 0: a week nobody reported is not a week nobody attended, and the ribbon
+            # already draws `sin dato` as a well rather than as a floor (rule 34).
+            "serie": [_int_or_none(v) for v in s],
+        })
+
+    total = rows.groupby("SemanaEstadistica")[Y].sum().reindex(weeks)
+    return {
+        "season": season, **release_stamp(panel),
+        "semanas": weeks,
+        "nacional": [_int_or_none(v) for v in total],
+        "regiones": regiones,
+        "servicios": len(index["facilities"]),
+        "alertas": sum(f["alerts"] for f in index["facilities"]),
+        "alzas": sum(f["surges"] for f in index["facilities"]),
+    }
 
 
 def build_live(alerts_path=ALERT_LIST_LIVE, forecast_path=FORECAST):
@@ -224,11 +283,15 @@ def _clean(v):
 
 def export(out=OUT):
     """Write the index and one file per facility. Returns the paths written."""
-    index, payloads = build()
+    index, payloads, nacional = build()
     (out / "facility").mkdir(parents=True, exist_ok=True)
     _write(out / "facilities.json", index)
+    _write(out / "nacional.json", nacional)
     for code, payload in payloads.items():
         _write(out / "facility" / f"{code}.json", payload)
+    print(f"OK  nacional · {len(nacional['regiones'])} regions "
+          f"{nacional['regiones'][0]['nombre']} -> {nacional['regiones'][-1]['nombre']} · "
+          f"{(out / 'nacional.json').stat().st_size / 1024:.0f} KB")
     print(f"OK  {len(payloads)} facilities · season {index['season']} · "
           f"index {(out / 'facilities.json').stat().st_size / 1024:.0f} KB · "
           f"largest facility {max((out / 'facility' / f'{c}.json').stat().st_size for c in payloads) / 1024:.1f} KB")
@@ -251,6 +314,21 @@ def demo(out=OUT):
     # AC-E6: first paint loads the index only, so the index must carry no per-week data.
     assert not any(isinstance(v, list) for f in index["facilities"] for v in f.values()), \
         "the index carries a series -- first paint would load every facility's weeks"
+
+    # AC-P3 -- the portada reads every figure it states from this file, so a wrong shape here is a
+    # wrong sentence on the surface a stranger reads first.
+    nac = json.loads((out / "nacional.json").read_text(encoding="utf-8"))
+    assert len(nac["semanas"]) == SEASON_WEEKS, "the national series is not a full season"
+    assert nac["servicios"] == len(index["facilities"]), "nacional and the index disagree on facilities"
+    assert nac["alertas"] == sum(f["alerts"] for f in index["facilities"]), "alert totals disagree"
+    assert nac["alzas"] == sum(f["surges"] for f in index["facilities"]), "surge totals disagree"
+    for r in nac["regiones"]:
+        assert len(r["serie"]) == SEASON_WEEKS, f"{r['nombre']}: series is not {SEASON_WEEKS} weeks"
+    # North to south, and asserted rather than trusted: the order is what the portada draws, and a
+    # silently re-sorted payload would draw a country that does not exist.
+    norte, sur = nac["regiones"][0]["nombre"], nac["regiones"][-1]["nombre"]
+    assert "Arica" in norte, f"the first region is {norte}, not the northern one"
+    assert "Magallanes" in sur, f"the last region is {sur}, not the southern one"
 
     panel = load_panel()
     thr = surge_thresholds(panel, int(alerts["year"].iloc[0]))

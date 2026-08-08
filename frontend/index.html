@@ -6,27 +6,55 @@
     <title>VitalFlow · alza respiratoria en urgencias hospitalarias de Chile</title>
     <meta name="description" content="Pronóstico semanal de demanda respiratoria en las 180 urgencias hospitalarias de Chile, a dos semanas, contra el propio percentil 90 de cada servicio. Construido solo con datos públicos." />
     <meta name="color-scheme" content="light dark" />
+    <!--
+      The theme the visitor chose, applied before first paint. Without it a visitor who picked light
+      on a dark-mode machine sees one frame of the wrong world on every load — React cannot write
+      the attribute until after it hydrates. Nothing is written when they have never chosen, so the
+      untouched default stays the operating system's preference. AC-P9.
+    -->
+    <script>
+      try {
+        var t = localStorage.getItem("tema");
+        if (t) document.documentElement.setAttribute("data-theme", t);
+      } catch (e) { /* private mode: the OS preference rules, which is the correct fallback */ }
+    </script>
   </head>
   <body>
     <!--
       DIRECTION CONTRACT — portada `#/`, seed key 91148d1f (surface, persuade).
+      Re-aimed 2026-08-07 (`context/specs/portada.md`). The contract below describes what `#/` is
+      NOW; the surface it replaced moved unchanged to `#/metodo` and its own contract is preserved
+      immediately after this one.
 
-      THESIS: a forecasting project is defined by what it refused to build, and every refusal here
-      has a measurement behind it. Refuses the category default: hero claim, three stat cards, how
-      it works, CTA.
+      THESIS: the Chilean respiratory season is not a peak, it is an eight-month plateau, and all
+      sixteen regions are on the same one — so the question worth answering is not "when is winter"
+      but "which week, at which service". Refuses the category default: hero claim, three stat
+      cards, how it works, CTA.
       OWN-WORLD: inherited, not invented — "la pizarra del turno". Pale green-cold surfaces, one
-      institutional ink (MINSAL blue), depth from 1px borders only, monospace for every datum. The
-      accent is re-pointed for this surface exactly as on `#/evidencia`: here it means the horizon
-      that deploys (h=2), never "the model spoke".
+      institutional ink (MINSAL blue), depth from 1px borders only, monospace for every datum. Only
+      the SCALE changes. The accent means "the model spoke", as on the operational screens.
+      AUDIENCE: two, declared — someone judging the method, and a general/press/public-health reader
+      who wants the phenomenon before the model.
+      STORY: the country's whole season sweeps past under the scroll and every region moves with it;
+      the counts land; the camera drops onto one real service and shows a claim wait two weeks and
+      come true; then what it is, then the four exits.
+      FIRST VIEWPORT: the sixteen regions by fifty-two weeks, filling as the season runs. No figure
+      on this page is hand-written — every one is read from `data/nacional.json`, which the weekly
+      refresh rewrites (AC-P2).
+      FINISH: unreviewed and undocumented is unfinished.
+
+      ---- PRESERVED: the contract of the surface now at `#/metodo`, seed key 91148d1f ----
+      THESIS: a forecasting project is defined by what it refused to build, and every refusal here
+      has a measurement behind it.
+      OWN-WORLD: the same, with the accent re-pointed exactly as on `#/evidencia`: there it means
+      the horizon that deploys (h=2), never "the model spoke".
       STORY: a technical evaluator arrives cold, is shown a measured wall they can drag, reads nine
       refusals that derive the product as their negative space, and leaves on the project's most
       uncomfortable number rather than its best.
       FIRST VIEWPORT: refusal 01 demonstrated, not announced — a draggable horizon instrument
       (h=1..h=6, R² 0.772 / 0.450 / 0.274 / negative) under an exhibition-scale headline, with h=2
-      permanently in the accent. Primary action is the scroll; exits live at the close.
+      permanently in the accent.
       FORM: candidate 5 of seven grounded structures, assigned by the roll — "las renuncias".
-      FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the
-      verdict, and DESIGN.md.
     -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

@@ -1,0 +1,347 @@
+/* La portada — `#/`. `context/specs/portada.md`.
+ *
+ *  Archivo aparte a propósito. `styles.css` ya lleva 727 líneas y dos superficies compartiendo un
+ *  namespace, y el 2026-08-06 una clase nueva chocó en silencio con `.barra`, que era la barra
+ *  superior del tablero. Una tercera superficie en el mismo archivo era pedirlo. Ninguna clase de
+ *  acá existe allá; se verificó antes de escribir, no después.
+ *
+ *  Se heredan los tokens tal cual. El acento sigue significando **el modelo habló**, así que el
+ *  acto 1 entero va en tinta: la demanda observada no es una afirmación del modelo. El azul aparece
+ *  una sola vez en toda la página, en el acto 3, y `--campana` se usa con el mismo significado que
+ *  ya tiene en las pantallas operativas — la ventana con presupuesto decretado.
+ *
+ *  El movimiento es UNO: la temporada corriendo bajo el scroll. Todo lo demás está quieto. Nada se
+ *  reproduce solo, nada loopea, y con `prefers-reduced-motion` cada acto renderiza en su estado
+ *  final (el bloque al final del archivo). */
+
+/* ---- el control de tema — AC-P9 ------------------------------------------------------------
+   Texto y no un sol y una luna: este mundo no tiene sistema de iconos en ninguna de sus cinco
+   superficies, es texto, mono y geometría. Inventar uno para un solo control sería un disfraz. */
+.tema {
+  position: fixed; top: calc(var(--u) * 3); right: calc(var(--u) * 3); z-index: 30;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.09em;
+  color: var(--rotulo); background: var(--pizarra);
+  border: 1px solid var(--borde); border-radius: var(--r-chico);
+  padding: calc(var(--u) * 1.5) calc(var(--u) * 2.5); cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+.tema:hover { color: var(--tinta); border-color: var(--rotulo); }
+
+/* ---- la hoja ---------------------------------------------------------------------------------
+   A sangre. Los márgenes negativos cancelan el padding global del `body`, que existe para las
+   cuatro superficies de lectura y estorba a la única que usa el viewport entero. */
+.hoja--entrada {
+  max-width: none; gap: 0;
+  margin: calc(var(--u) * -9) calc(var(--u) * -5) calc(var(--u) * -16);
+}
+.entrada { display: flex; flex-direction: column; }
+.entrada b { font-weight: 600; }
+
+.entrada__marca {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--tinta);
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(var(--u) * 3);
+}
+.entrada__marca span {
+  text-transform: none; letter-spacing: 0.04em; color: var(--tenue); font-size: 11px;
+}
+
+/* ---- acto 1: el país -------------------------------------------------------------------------
+   La sección mide tres viewports y su contenido queda pegado arriba: el scroll de esos tres
+   viewports es lo que corre la temporada. `--semana` la escribe `useSweep`, una sola propiedad
+   para las 832 celdas. */
+.pais { height: 320vh; position: relative; }
+.pais__fijo {
+  position: sticky; top: 0; min-height: 100vh;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: calc(var(--u) * 6);
+  padding: calc(var(--u) * 8) calc(var(--u) * 6);
+  max-width: 1180px; margin: 0 auto;
+}
+
+.pais__titulo {
+  font-size: clamp(2rem, 5.4vw, 4.25rem); line-height: 1.04; letter-spacing: -0.032em;
+  font-weight: 600; text-wrap: balance; max-width: 20ch;
+}
+.pais__titulo span {
+  display: block; margin-top: calc(var(--u) * 3);
+  font-size: clamp(0.95rem, 1.7vw, 1.4rem); line-height: 1.35; letter-spacing: -0.01em;
+  font-weight: 400; color: var(--rotulo); max-width: 34ch;
+}
+
+.pais__figura { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
+
+.pais__cinta {
+  --etiqueta: 200px;
+  position: relative;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: calc(var(--u) * 6) 0 0;
+}
+
+/* La ventana con presupuesto decretado, dibujada como DOS REGLAS y no como un bloque relleno.
+   Un relleno queda tapado por el fondo de cada pista donde las celdas están encendidas, y asoma
+   justo donde están apagadas — o sea, se ve exactamente al revés de lo que significa. Punteado y
+   en gris, como la regla del umbral del acto 3: es un calendario del MINSAL, no una medición de
+   este proyecto, y por eso no lleva el acento. */
+.pais__campana {
+  position: absolute; top: calc(var(--u) * 2); bottom: calc(var(--u) * 5); z-index: 3;
+  left: calc(var(--etiqueta) + (100% - var(--etiqueta)) * (var(--desde) - 1) / var(--n));
+  width: calc((100% - var(--etiqueta)) * (var(--hasta) - var(--desde) + 1) / var(--n));
+  border-left: 1px dashed var(--rotulo); border-right: 1px dashed var(--rotulo);
+  pointer-events: none;
+}
+.pais__campana i {
+  position: absolute; left: 0; bottom: 100%; white-space: nowrap;
+  font-family: var(--mono); font-style: normal; font-size: 10px; letter-spacing: 0.05em;
+  color: var(--rotulo); padding-bottom: calc(var(--u) * 0.5);
+}
+
+/* La línea del barrido. Mismo gesto que la now-line de la pantalla en vivo, y por eso 2px de
+   tinta plena: en el borde entre lo encendido y lo apagado, 1px no se distingue del borde mismo.
+   Se apaga en los dos extremos, donde no marca nada que el ojo no vea ya. */
+.pais__ahora {
+  position: absolute; top: calc(var(--u) * 2); bottom: calc(var(--u) * 5); z-index: 4; width: 2px;
+  left: calc(var(--etiqueta) + (100% - var(--etiqueta)) * var(--semana, var(--n)) / var(--n));
+  background: var(--tinta);
+  opacity: min(
+    clamp(0, calc(var(--semana, 0) * 2), 1),
+    clamp(0, calc((var(--n) - var(--semana, var(--n))) * 2), 1));
+}
+
+.pais__fila { position: relative; z-index: 1; display: flex; align-items: center; gap: calc(var(--u) * 3); }
+.pais__fila > b {
+  flex: 0 0 calc(var(--etiqueta) - var(--u) * 3);
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.03em;
+  color: var(--rotulo); font-weight: 400;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pais__pista {
+  flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 1px;
+  height: 15px; background: var(--hueco); border-radius: 1px;
+}
+
+/* Una celda: tinta a la opacidad de su propio valor, encendida cuando el barrido la pasa.
+   El `999` de respaldo es lo que se ve si el JS no corre nunca — la temporada completa, quieta. */
+.pais__celda {
+  --on: clamp(0, calc(var(--semana, 999) - var(--w) + 1.5), 1);
+  background: var(--tinta);
+  opacity: calc((0.05 + 0.95 * var(--v)) * var(--on));
+}
+/* Regla 34: una semana que nadie reportó no es una semana sin atenciones. Se dibuja como hueco
+   marcado, nunca como demanda cero. Hoy no hay ninguna; el día que aparezca no mentirá. */
+.pais__celda--vacia {
+  background: repeating-linear-gradient(
+    45deg, transparent 0 2px, color-mix(in oklab, var(--tenue) 40%, transparent) 2px 3px);
+  opacity: var(--on);
+}
+
+.pais__eje {
+  position: relative; height: calc(var(--u) * 5); margin-left: var(--etiqueta);
+  font-family: var(--mono); font-size: 10px; color: var(--tenue);
+}
+.pais__eje span {
+  position: absolute; top: calc(var(--u) * 1.5);
+  left: calc(100% * (var(--w) - 0.5) / var(--n)); transform: translateX(-50%);
+}
+
+.pais__figura figcaption {
+  font-family: var(--mono); font-size: 11px; line-height: 1.5; letter-spacing: 0.02em;
+  color: var(--rotulo); max-width: 78ch;
+}
+
+.pais__lectura {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--u) * 6);
+  border-top: 1px solid var(--borde); padding-top: calc(var(--u) * 4);
+}
+.pais__lectura p { font-size: 14px; line-height: 1.6; color: var(--rotulo); max-width: 52ch; }
+.pais__lectura b { color: var(--tinta); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* ---- acto 2: la escala -----------------------------------------------------------------------
+   Una frase con las cifras a escala dentro de la propia oración. Cuatro tarjetas iguales de número
+   grande y rótulo chico es exactamente la plantilla que esta página existe para no ser. */
+.escala {
+  padding: calc(var(--u) * 24) calc(var(--u) * 6);
+  max-width: 1180px; margin: 0 auto; width: 100%;
+  display: flex; flex-direction: column; gap: calc(var(--u) * 5);
+  border-top: 1px solid var(--borde);
+}
+.escala__frase {
+  font-size: clamp(1.35rem, 3.1vw, 2.5rem); line-height: 1.32; letter-spacing: -0.022em;
+  font-weight: 400; text-wrap: pretty; max-width: 26ch;
+}
+.escala__frase i { font-style: italic; }
+.escala__cifra {
+  font-family: var(--mono); font-weight: 600; font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em; font-size: 1.22em;
+}
+.escala__pie { font-size: 14px; line-height: 1.6; color: var(--rotulo); max-width: 62ch; }
+
+/* ---- acto 3: el mecanismo --------------------------------------------------------------------
+   El único azul de la página, y significa lo mismo que en las pantallas operativas: el modelo
+   habló. La semana reclamada usa el vocabulario que la pantalla en vivo ya fijó —
+   **contorno = está afirmado · lleno = ocurrió** — para que quien siga hasta `#/<code>/ahora`
+   llegue sabiéndolo leer. */
+.mecanismo { height: 300vh; position: relative; }
+.mecanismo--vacio { height: 0; }
+.mecanismo__fijo {
+  position: sticky; top: 0; min-height: 100vh;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: calc(var(--u) * 7);
+  padding: calc(var(--u) * 8) calc(var(--u) * 6);
+  max-width: 1180px; margin: 0 auto;
+}
+.mecanismo__titulo {
+  font-size: clamp(1.6rem, 4vw, 3.1rem); line-height: 1.08; letter-spacing: -0.03em;
+  font-weight: 600; text-wrap: balance; max-width: 18ch;
+}
+
+.mecanismo__figura { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
+.mecanismo__grafico { position: relative; height: min(34vh, 260px); }
+
+.mecanismo__umbral {
+  position: absolute; left: 0; right: 0; z-index: 2;
+  bottom: calc(var(--y) * 100%);
+  border-top: 1px dashed var(--rotulo);
+}
+.mecanismo__umbral b {
+  position: absolute; right: 0; bottom: calc(var(--u) * 1);
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.03em;
+  color: var(--rotulo); font-weight: 400; background: var(--muro); padding-left: calc(var(--u) * 2);
+}
+
+.mecanismo__pista {
+  position: absolute; inset: 0;
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; align-items: end;
+}
+/* La temporada llega hasta la semana de origen; el resto entra cuando el scroll lo trae, y entra
+   COMPLETO. La primera versión dejaba `--hasta` clavado en la semana objetivo, así que las
+   semanas 36 a 52 no aparecían nunca: el gráfico mostraba media temporada y diecisiete columnas
+   muertas a la derecha, y con `prefers-reduced-motion` eso era lo único que se veía. */
+.mecanismo__col {
+  --hasta: calc(var(--origen) + clamp(0, calc((var(--p, 1) - 0.55) * 2.6), 1) * (var(--n) - var(--origen)));
+  --on: clamp(0, calc(var(--hasta) - var(--w) + 1), 1);
+  background: var(--tinta); opacity: calc(0.42 * var(--on));
+  height: calc(var(--v) * 100%); min-height: 1px; border-radius: 1px 1px 0 0;
+}
+.mecanismo__col--avisada { background: var(--alerta); opacity: calc(0.9 * var(--on)); }
+
+/* La semana reclamada: aparece como contorno cuando el modelo la escribe, y se llena cuando
+   efectivamente ocurre. No está sujeta a `--on`: su aparición ES el relato. */
+.mecanismo__col--objetivo {
+  --reclamo: clamp(0, calc((var(--p, 1) - 0.16) * 6), 1);
+  --ocurre: clamp(0, calc((var(--p, 1) - 0.62) * 5), 1);
+  background: color-mix(in oklab, var(--alerta) calc(var(--ocurre) * 100%), transparent);
+  border: 1.5px solid var(--alerta); opacity: var(--reclamo);
+}
+
+.mecanismo__figura figcaption {
+  font-family: var(--mono); font-size: 11px; line-height: 1.5; letter-spacing: 0.02em;
+  color: var(--rotulo); max-width: 78ch;
+}
+
+/* Sin numeración: la secuencia ya la llevan las propias frases — «Semana 33 · Y escribe · Semana
+   35» — y tres cifras chicas arriba a la derecha no agregaban orden, agregaban tres huérfanas. */
+.mecanismo__tiempos {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--u) * 6);
+}
+.mecanismo__tiempos li {
+  padding-top: calc(var(--u) * 4);
+  border-top: 1px solid var(--borde);
+  font-size: 13.5px; line-height: 1.55; color: var(--rotulo);
+}
+.mecanismo__tiempos b { color: var(--tinta); }
+.mecanismo__tiempos i { font-family: var(--mono); font-style: normal; color: var(--tinta); }
+
+/* ---- acto 4: qué es --------------------------------------------------------------------------- */
+.que {
+  padding: calc(var(--u) * 24) calc(var(--u) * 6);
+  max-width: 1180px; margin: 0 auto; width: 100%;
+  display: flex; flex-direction: column; gap: calc(var(--u) * 5);
+  border-top: 1px solid var(--borde);
+}
+.que__titulo {
+  font-size: clamp(1.5rem, 3.4vw, 2.6rem); line-height: 1.1; letter-spacing: -0.028em;
+  font-weight: 600; margin-bottom: calc(var(--u) * 2);
+}
+.que__entrada { font-size: 15.5px; line-height: 1.65; color: var(--rotulo); max-width: 68ch; }
+.que__entrada b { color: var(--tinta); }
+.que__palancas {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--u) * 5);
+  margin-top: calc(var(--u) * 4);
+}
+.que__palancas li {
+  border-top: 1px solid var(--borde); padding-top: calc(var(--u) * 3);
+  display: flex; flex-direction: column; gap: calc(var(--u) * 1);
+}
+.que__palancas b { font-size: 14px; }
+.que__palancas span {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.05em; color: var(--tenue);
+}
+
+/* ---- acto 5: las salidas ---------------------------------------------------------------------- */
+.acceso {
+  padding: calc(var(--u) * 24) calc(var(--u) * 6) calc(var(--u) * 20);
+  max-width: 1180px; margin: 0 auto; width: 100%;
+  display: flex; flex-direction: column; gap: calc(var(--u) * 6);
+  border-top: 1px solid var(--borde);
+}
+.acceso__titulo {
+  font-size: clamp(1.5rem, 3.4vw, 2.6rem); line-height: 1.1; letter-spacing: -0.028em;
+  font-weight: 600;
+}
+.acceso__vias { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--u) * 4); }
+.acceso__via {
+  display: flex; flex-direction: column; gap: calc(var(--u) * 2);
+  padding: calc(var(--u) * 5);
+  border: 1px solid var(--borde); border-radius: var(--r-medio);
+  background: var(--pizarra); text-decoration: none;
+  transition: border-color 160ms ease, transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.acceso__via:hover { border-color: var(--rotulo); transform: translateY(-2px); }
+.acceso__via b { font-size: 15px; }
+.acceso__via span { font-size: 13px; line-height: 1.55; color: var(--rotulo); }
+.acceso__via--fuerte { border-color: var(--alerta); }
+.acceso__via--fuerte b { color: var(--alerta); }
+
+/* ---- responsive -------------------------------------------------------------------------------
+   El listón es vertical por naturaleza: Chile es una cinta y el caso raro es el desktop ancho, no
+   el teléfono. Lo que se aprieta son las etiquetas de región y las grillas de tres columnas. */
+@media (max-width: 900px) {
+  .pais__cinta { --etiqueta: 104px; }
+  .pais__lectura { grid-template-columns: 1fr; gap: calc(var(--u) * 4); }
+  .mecanismo__tiempos, .que__palancas { grid-template-columns: 1fr; gap: calc(var(--u) * 4); }
+  .acceso__vias { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 620px) {
+  .hoja--entrada { margin-left: calc(var(--u) * -5); margin-right: calc(var(--u) * -5); }
+  .pais__fijo, .escala, .que, .acceso, .mecanismo__fijo { padding-left: calc(var(--u) * 4); padding-right: calc(var(--u) * 4); }
+  .escala, .que { padding-top: calc(var(--u) * 16); padding-bottom: calc(var(--u) * 16); }
+  .acceso { padding-top: calc(var(--u) * 16); }
+  /* La etiqueta de región pasa a ir ENCIMA de su pista: a 390px una columna de texto de 104px se
+     come un cuarto del ancho y deja la temporada en nada. */
+  .pais__cinta { --etiqueta: 0px; gap: calc(var(--u) * 2); }
+  .pais__fila { flex-direction: column; align-items: stretch; gap: 2px; }
+  .pais__fila > b { flex: none; font-size: 9.5px; }
+  /* `flex: 1` estaba escrito para un padre en FILA. Al volverse columna pasa a mandar sobre el eje
+     vertical, pisa el `height` y las dieciséis pistas colapsan a nada: a 390px lo único que
+     quedaba en pantalla era la banda de campaña, visible justo porque ya nada la tapaba. Esto no
+     lo veía el build ni el detector — se vio abriéndolo. */
+  .pais__pista { flex: none; height: 11px; gap: 0; }
+  .pais__eje { margin-left: 0; }
+  .pais__campana i { font-size: 9px; }
+  .mecanismo__grafico { height: 190px; }
+  .mecanismo__umbral b { font-size: 9.5px; }
+  .tema { top: calc(var(--u) * 2); right: calc(var(--u) * 2); }
+}
+
+/* ---- sin movimiento ---------------------------------------------------------------------------
+   No es una degradación: es la misma página, entera, quieta. `useSweep` fija `--semana` y `--p` en
+   su valor final, y acá se sueltan las secciones para que no queden tres viewports de scroll vacío
+   detrás de un contenido que ya no se mueve. */
+@media (prefers-reduced-motion: reduce) {
+  .pais, .mecanismo { height: auto; }
+  .pais__fijo, .mecanismo__fijo { position: static; min-height: 0; }
+  .pais__ahora { display: none; }
+  .acceso__via:hover { transform: none; }
+}

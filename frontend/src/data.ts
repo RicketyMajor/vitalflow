@@ -68,6 +68,29 @@ export type Live = Facility & {
   forecast: Claim[];
 };
 
+/** The season as the country saw it, written by `export_frontend.build_nacional`. The portada reads
+    every figure it states from here — including the ones it derives, like how tightly the regions
+    move together — so no number on that surface can drift away from the model that produced it.
+    Series are RAW weekly totals: the Metropolitana has 24 hospital ERs and Arica has one, so the
+    page normalises each region against its own peak week. Dividing here would have thrown that
+    away for every other reader. */
+export type Region = { nombre: string; servicios: number; serie: (number | null)[] };
+
+export type Nacional = {
+  season: number;
+  stamp: string;
+  settled_through: [number, number];
+  published: string | null;
+  semanas: number[];
+  nacional: (number | null)[];
+  /** North to south, ordered by the smallest DEIS facility code in each region. */
+  regiones: Region[];
+  servicios: number;
+  alertas: number;
+  alzas: number;
+};
+
 export const loadIndex = () => load<Index>("data/facilities.json");
+export const loadNacional = () => load<Nacional>("data/nacional.json");
 export const loadFacility = (code: string) => load<Facility>(`data/facility/${code}.json`);
 export const loadLive = (code: string) => load<Live>(`data/live/${code}.json`);

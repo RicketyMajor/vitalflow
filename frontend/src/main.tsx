@@ -1,19 +1,25 @@
-/* Hash routing, ~30 lines and no dependency. `#/` the landing, `#/servicios` the explorer,
-   `#/<code>` a facility, `#/<code>/ahora` its live forecast, `#/evidencia` the ledger.
+/* Hash routing, ~30 lines and no dependency. `#/` the portada, `#/metodo` the nine refusals,
+   `#/servicios` the explorer, `#/<code>` a facility, `#/<code>/ahora` its live forecast,
+   `#/evidencia` the ledger.
    Hash rather than history so a static build deploys under any path with no server rewrite, and so
-   a facility is deep-linkable — which is the only reason to have a router here at all. */
+   a facility is deep-linkable — which is the only reason to have a router here at all.
+
+   `#/` changed owner on 2026-08-07 (`specs/portada.md`). «Las renuncias» moved to `#/metodo`
+   unchanged; no other route moved, so no deep link that ever existed is broken. */
 
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { loadFacility, loadIndex, loadLive } from "./data";
-import type { Facility as F, Index, Live as L } from "./data";
+import { loadFacility, loadIndex, loadLive, loadNacional } from "./data";
+import type { Facility as F, Index, Live as L, Nacional } from "./data";
 import { Evidence } from "./Evidence";
 import { Explorer } from "./Explorer";
 import { Facility } from "./Facility";
-import { Landing } from "./Landing";
 import { Live } from "./Live";
+import { Metodo } from "./Metodo";
+import { Portada } from "./Portada";
 import { freshness } from "./season";
 import "./styles.css";
+import "./portada.css";
 
 function useHash() {
   const [hash, setHash] = useState(() => location.hash.slice(1) || "/");
@@ -43,17 +49,22 @@ function App() {
   const [head, tail] = useHash().replace(/^\//, "").split("/");
   const evidencia = head === "evidencia";
   const servicios = head === "servicios";
-  // The landing owns its first viewport, so the shared masthead is suppressed there — a preamble
-  // above a thesis is a preamble, and the page carries its own marca and its own stamp line.
+  const metodo = head === "metodo";
   const portada = !head;
+  // Both narrative surfaces own their first viewport and carry their own marca and stamp, so the
+  // shared masthead is suppressed on them: a preamble above a thesis is a preamble.
+  const propio = portada || metodo;
   // Shares the promise `ExplorerRoute` uses — `data.ts` caches by path, so this costs one cached
   // 39 KB index across every route. The stamp belongs on all of them: a stale reading is not less
   // stale for having been reached through a facility link.
   const { data: index } = useAsync<Index>(loadIndex, "index");
 
+  // `hoja--portada` is the 1120px measure «las renuncias» was composed against; it moved with the
+  // surface. The new portada is full-bleed and owns its own widths.
   return (
-    <div className={portada ? "hoja hoja--portada" : "hoja"}>
-      {!portada && (
+    <div className={portada ? "hoja hoja--entrada" : metodo ? "hoja hoja--portada" : "hoja"}>
+      <Tema />
+      {!propio && (
         <header className="encabezado">
           <h1><a href="#/">VitalFlow</a> · explorador de servicios</h1>
           <p>
@@ -64,17 +75,55 @@ function App() {
           <nav>
             <a href="#/">Portada</a>
             <a href="#/servicios" aria-current={servicios ? "page" : undefined}>Todos los servicios</a>
+            <a href="#/metodo">Método</a>
             <a href="#/evidencia" aria-current={evidencia ? "page" : undefined}>Evidencia</a>
           </nav>
         </header>
       )}
 
-      {portada ? <Landing index={index} />
+      {portada ? <PortadaRoute />
+        : metodo ? <Metodo index={index} />
         : evidencia ? <Evidence />
         : servicios ? <ExplorerRoute />
         : tail === "ahora" ? <LiveRoute code={head} />
         : <FacilityRoute code={head} />}
     </div>
+  );
+}
+
+/* The theme control. `styles.css` has declared `:root[data-theme="dark"]` and `[="light"]` since
+   2026-08-02 and NOTHING had ever written the attribute — the selectors were dead for five days.
+   AC-P9.
+
+   No attribute is written until the visitor chooses one, so the untouched default stays the
+   operating system's preference and the `prefers-color-scheme` block keeps ruling. Text rather
+   than a sun and a moon: this world has no icon system at all — it is text, monospace and
+   geometry — and inventing one for a single control would be the costume the craft floor warns
+   about. */
+function Tema() {
+  const [tema, setTema] = useState<string | null>(() => localStorage.getItem("tema"));
+
+  useEffect(() => {
+    const raiz = document.documentElement;
+    if (tema) raiz.setAttribute("data-theme", tema);
+    else raiz.removeAttribute("data-theme");
+  }, [tema]);
+
+  const oscuro = tema ? tema === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+
+  return (
+    <button
+      type="button"
+      className="tema"
+      aria-label={oscuro ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+      onClick={() => {
+        const siguiente = oscuro ? "light" : "dark";
+        localStorage.setItem("tema", siguiente);
+        setTema(siguiente);
+      }}
+    >
+      {oscuro ? "claro" : "oscuro"}
+    </button>
   );
 }
 
@@ -94,6 +143,15 @@ function Sello({ index }: { index: Index }) {
         : <>actualizado {dias === 0 ? "hoy" : `hace ${dias} ${dias === 1 ? "día" : "días"}`}</>}
     </p>
   );
+}
+
+/** AC-P12: the portada's first paint is the index plus the national payload, and one facility for
+    the mechanism act. Never the 180 — the same budget AC-E6 fixed for the explorer. */
+function PortadaRoute() {
+  const { data: nacional } = useAsync<Nacional>(loadNacional, "nacional");
+  const { data: index } = useAsync<Index>(loadIndex, "index");
+  if (!nacional || !index) return <p className="cargando">Cargando…</p>;
+  return <Portada nacional={nacional} index={index} />;
 }
 
 function ExplorerRoute() {

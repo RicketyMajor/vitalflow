@@ -31,7 +31,7 @@ const HORIZONTE = [
 const ALTO_MAX = 148;   // px, la celda de h=1
 const ALTO_HUECO = 26;  // px, el pozo `sin dato` de la cinta
 
-export function Landing({ index }: { index?: Index }) {
+export function Metodo({ index }: { index?: Index }) {
   return (
     <div className="portada">
       <Muro />
