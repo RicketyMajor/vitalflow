@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { loadFacility } from "./data";
 import type { Facility, Index, Nacional } from "./data";
-import { freshness } from "./season";
+import { freshness, quieto } from "./season";
 
 /* El servicio del acto 3. Elegido por medición sobre los 180 payloads —- 6 avisos, 6 aciertos,
    ninguna falsa alarma, y su semana 35 fue la de rango 1 de toda su temporada -— pero es una
@@ -35,12 +35,16 @@ const SEMANA_EJEMPLO = 35;
 const CAMPANA = [22, 35] as const;
 
 export function Portada({ nacional, index }: { nacional: Nacional; index: Index }) {
+  /* EL ORDEN CAMBIÓ (AC-Q2). «Qué es» estaba en el acto 4, a ~6 viewports: quien juzga el método
+     tenía su gancho en el primer viewport y quien llegaba en frío no tenía respuesta hasta la
+     mitad. Sube al segundo lugar. El hallazgo sigue abriendo — no se cambia por un resumen — y la
+     escala pasa a apoyarlo en vez de precederlo. */
   return (
     <div className="entrada">
       <Pais n={nacional} />
+      <Que />
       <Escala n={nacional} />
       <Mecanismo />
-      <Que />
       <Acceso n={nacional} index={index} />
     </div>
   );
@@ -56,7 +60,7 @@ export function Portada({ nacional, index }: { nacional: Nacional; index: Index 
    región y no la ola. */
 
 function Pais({ n }: { n: Nacional }) {
-  const ref = useSweep<HTMLElement>("--semana", n.semanas.length);
+  const ref = useReveal<HTMLElement>("--semana", n.semanas.length);
   const r = correlacionMediana(n);
   const alta = semanaMasAlta(n.nacional);
 
@@ -71,6 +75,17 @@ function Pais({ n }: { n: Nacional }) {
           La temporada respiratoria de Chile no es un peak.
           <span> Es una meseta de ocho meses, y las {n.regiones.length} regiones están en la misma.</span>
         </h1>
+
+        {/* AC-Q1 — la respuesta a «¿qué es esto?» dentro del primer viewport, en prosa legible y
+            no en la capa de anotación de 11px. AC-Q3: no lleva ninguna cifra salvo `h=2`, que es
+            una decisión de producto y que AC-P6 obliga a nombrar. Todo lo demás lo siguen leyendo
+            del export los actos que vienen. */}
+        <p className="pais__identidad">
+          <b>VitalFlow avisa, con dos semanas de anticipación, qué urgencia hospitalaria va a tener
+          una semana de demanda respiratoria inusualmente alta para ella misma.</b> Va dirigido a
+          quien puede mover algo en ese plazo — el jefe de urgencia o el coordinador de turno — y
+          está construido enteramente con datos públicos.
+        </p>
 
         <figure className="pais__figura">
           <div
@@ -177,7 +192,7 @@ function Escala({ n }: { n: Nacional }) {
 function Mecanismo() {
   const [f, setF] = useState<Facility | null>(null);
   useEffect(() => { loadFacility(EJEMPLO).then(setF, () => setF(null)); }, []);
-  const ref = useSweep<HTMLElement>("--p", 1);
+  const ref = useReveal<HTMLElement>("--p", 1);
 
   if (!f) return <section className="mecanismo mecanismo--vacio" aria-hidden="true" />;
 
@@ -260,10 +275,13 @@ function Que() {
         percentil 90 histórico de ese servicio — y entrega esa estimación como un <b>orden</b>, no
         como un porcentaje.
       </p>
+      {/* El destinatario y el «datos públicos» los dice ahora la línea de identidad del acto 1, así
+          que acá quedaría repetido. Lo que este párrafo sí aporta es la reproducibilidad concreta. */}
       <p className="que__entrada">
-        Va dirigido a quien puede hacer algo con dos semanas de aviso: el jefe de urgencia o el
-        coordinador de turno. Está construido <b>enteramente con datos públicos</b>, así que
-        cualquiera puede reproducir cada número con un navegador.
+        Cualquiera puede reproducir cada número de este sitio con un navegador: los datos vienen del
+        DEIS, se publican semanalmente, y todo el procesamiento está en el repositorio. Lo que el
+        modelo entrega es un <b>orden</b> entre las semanas de un mismo servicio — nunca un
+        porcentaje, porque la calibración se midió y se rechazó.
       </p>
       <ul className="que__palancas">
         <li><b>El plan de contingencia de camas</b><span>corre en 48–72 h</span></li>
@@ -287,22 +305,22 @@ function Acceso({ n, index }: { n: Nacional; index: Index }) {
     <section className="acceso" aria-labelledby="acceso-t">
       <h2 className="acceso__titulo" id="acceso-t">Por dónde entrar.</h2>
 
-      <div className="acceso__vias">
-        <a className="acceso__via acceso__via--fuerte" href="#/servicios">
+      <div className="puertas">
+        <a className="puerta puerta--fuerte" href="#/servicios">
           <b>Busca tu urgencia</b>
           <span>Cualquiera de los {n.servicios} servicios: su temporada completa, sus avisos y lo
           que pasó después.</span>
         </a>
-        <a className="acceso__via" href={`#/${vivo}/ahora`}>
+        <a className="puerta" href={`#/${vivo}/ahora`}>
           <b>La semana que no ha ocurrido</b>
           <span>El pronóstico vivo de una urgencia, sobre una semana que todavía nadie observó.</span>
         </a>
-        <a className="acceso__via" href="#/metodo">
+        <a className="puerta" href="#/metodo">
           <b>Cómo se construyó</b>
           <span>Las nueve cosas que este proyecto se negó a hacer, cada una con la medición que la
           forzó.</span>
         </a>
-        <a className="acceso__via" href="#/evidencia">
+        <a className="puerta" href="#/evidencia">
           <b>La evidencia</b>
           <span>Lo que se escribió antes de tocar los datos, y lo que volvió. Los fallos en la misma
           tabla que los aciertos.</span>
@@ -350,49 +368,59 @@ function Cifra({ n }: { n: number }) {
   return <b className="escala__cifra" ref={ref}>{n.toLocaleString("es-CL")}</b>;
 }
 
-/** Encadena una custom property al progreso del scroll dentro de la propia sección: 0 cuando su
- *  borde superior toca el del viewport, 1 cuando el inferior toca el suyo.
+/** Encadena una custom property a un TWEEN que corre UNA VEZ, cuando la sección entra en vista.
  *
- *  Una sola propiedad manda las 832 celdas del acto 1: el CSS decide por celda, así que React
- *  renderiza una vez y el barrido no vuelve a tocar el DOM.
+ *  Antes esto iba encadenado al scroll, y el precio estaba medido: `.pais` medía 320vh y
+ *  `.mecanismo` 300vh, o sea **6.2 viewports de scroll para producir dos animaciones**, de los
+ *  cuales ~3.8 eran recorrido muerto detrás de un panel `sticky`. La portada entera medía ~8
+ *  viewports y su única salida estaba al final de los ocho. El movimiento era un peaje.
  *
- *  ponytail: veinte líneas en vez de `motion`. Se instaló, se midió y se sacó — 138 kB de chunk
- *  para tres primitivas (progreso de scroll, `inView`, un contador) que el navegador ya trae. El
- *  resultado en pantalla es el mismo porque el trabajo real lo hace el CSS. Si alguna vez hace
- *  falta una orquestación que esto no alcance, `npm i motion` y de vuelta.
+ *  Cambia QUIÉN escribe la propiedad. No cambia la propiedad: `--semana` y `--p` significan lo
+ *  mismo y NI UNA LÍNEA del CSS del barrido se toca. Las 832 celdas del acto 1 las sigue mandando
+ *  el CSS desde un solo valor.
  *
- *  Sin JS la sección se lee entera y quieta: el respaldo de `--semana` en el CSS es la temporada
- *  completa, no una vacía. */
-function useSweep<T extends HTMLElement>(prop: string, fin: number) {
-  const ref = useRef<T>(null);
+ *  Es una resta neta: se van el listener de scroll, el de resize y `getBoundingClientRect`.
+ *
+ *  ponytail: `IntersectionObserver` + `requestAnimationFrame`, los dos nativos. Ver la nota de
+ *  2026-08-07 sobre `motion` — 138 kB de chunk para tres primitivas que el navegador ya trae.
+ *
+ *  ⚠ EL NODO SE RECIBE POR REF DE CALLBACK, Y NO ES ESTILO: es el arreglo de un defecto medido el
+ *  2026-08-08 que venía desde `useSweep`. `Mecanismo` retorna temprano mientras carga su servicio
+ *  y ESE nodo no lleva ref, así que el efecto corría una sola vez contra `ref.current === null`,
+ *  abortaba, y no volvía a correr nunca porque sus deps no incluían la llegada del elemento:
+ *  `--p` no se escribía JAMÁS. No se notó porque el respaldo del CSS es `var(--p, 1)`, o sea el
+ *  estado FINAL — la animación no corría y la página se veía terminada.
+ *  Un ref de callback dispara cuando el nodo entra, en el render que sea, así que el arreglo vale
+ *  para los dos llamadores y para el que venga. */
+function useReveal<T extends HTMLElement>(prop: string, fin: number, ms = 1300) {
+  const [el, setEl] = useState<T | null>(null);
   useEffect(() => {
-    const el = ref.current;
     if (!el) return;
+    // Con reduced-motion aterriza escrito. Es la misma página, entera, quieta.
     if (quieto()) { el.style.setProperty(prop, String(fin)); return; }
 
+    /* El valor inicial se escribe YA. Sin esto el respaldo del CSS (`var(--semana, 999)`) pinta la
+       temporada completa en el primer cuadro y el tween la borra de golpe: un parpadeo al revés. */
+    el.style.setProperty(prop, "0");
+
     let cuadro = 0;
-    const medir = () => {
-      cuadro = 0;
-      const { top, height } = el.getBoundingClientRect();
-      const recorrido = height - innerHeight;
-      const p = recorrido <= 0 ? 1 : Math.min(1, Math.max(0, -top / recorrido));
-      el.style.setProperty(prop, (p * fin).toFixed(3));
-    };
-    const alMover = () => { if (!cuadro) cuadro = requestAnimationFrame(medir); };
-
-    medir();
-    addEventListener("scroll", alMover, { passive: true });
-    addEventListener("resize", alMover, { passive: true });
-    return () => {
-      cancelAnimationFrame(cuadro);
-      removeEventListener("scroll", alMover);
-      removeEventListener("resize", alMover);
-    };
-  }, [prop, fin]);
-  return ref;
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return;
+      io.disconnect();                       // una vez. Nada loopea, nada se reproduce solo.
+      const inicio = performance.now();
+      const paso = (t: number) => {
+        const p = Math.min(1, (t - inicio) / ms);
+        // Salida cúbica: arranca rápido y se posa. Nunca sobrepasa el final.
+        el.style.setProperty(prop, (fin * (1 - (1 - p) ** 3)).toFixed(3));
+        if (p < 1) cuadro = requestAnimationFrame(paso);
+      };
+      cuadro = requestAnimationFrame(paso);
+    }, { threshold: 0.2 });
+    io.observe(el);
+    return () => { io.disconnect(); cancelAnimationFrame(cuadro); };
+  }, [el, prop, fin, ms]);
+  return setEl;
 }
-
-const quieto = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** "Región Del Libertador Gral. B. O'Higgins" no cabe en una fila de cinta. El nombre completo
     queda en el `title`; nada se pierde, solo se acorta lo que se dibuja. */

@@ -150,21 +150,26 @@ for (const [nombre, selectores] of TEMAS) {
     linea(r >= min, r, min, `${a} vs ${b} — separacion entre escalones`);
   }
 
-  /* A4 — el canto de una caja cerrada. NO es 1.4.11: un divisor decorativo esta exento y esto no
-     se reporta como violacion. Es un piso de OFICIO, y existe porque se midio que el fondo de una
-     tarjeta (`--pizarra` sobre `--muro`) da 1.12 en claro y 1.09 en oscuro — mas debil que el
-     borde. En un mundo cuyo unico canal de profundidad son los bordes, el canto es el borde y nada
-     mas, asi que si el borde se cae la profundidad se cae entera.
-     Las TRES composiciones en que aparece, porque el que manda cambia con el tema: en claro el
-     canto exterior, en oscuro la caja sin fondo propio. */
-  console.log(`  --- el canto estructural (A4, piso de oficio 2.0) ---`);
+  /* --- LA TARJETA SE LEE COMO OBJETO (AC-W3, nuevo 2026-08-08) --------------------------------
+     El piso que no existía, y su ausencia es lo que produjo 1.12 en claro y 1.09 en oscuro: una
+     tarjeta indistinguible del suelo sobre el que está. A4 subió el borde a 2.0 justamente porque
+     el relleno no distinguía nada; con el relleno en su propio piso, la profundidad corre por DOS
+     canales y el borde puede volver a ser puntuación. */
+  console.log(`  --- la tarjeta se lee como objeto (AC-W3, piso 1.30) ---`);
   const pz = res("--pizarra", muro);
+  linea(ratio(pz, muro) >= 1.30, ratio(pz, muro), 1.30, "--pizarra vs --muro — el relleno de la tarjeta");
+
+  /* A4, RE-COSTEADA. Sigue sin ser 1.4.11 y sigue sin reportarse como violación: es oficio.
+     El piso baja de 2.0 a 1.6 porque su premisa explícita —«el relleno distingue menos que el
+     borde»— deja de ser cierta en cuanto AC-W3 se cumple. Las TRES composiciones se conservan:
+     la que manda cambia con el tema (en claro el canto exterior, en oscuro la caja sin fondo). */
+  console.log(`  --- el canto estructural (A4 re-costeada, piso de oficio 1.6) ---`);
   const ESTRUCTURA: [RGB, RGB, string][] = [
     [sobre(T["--borde-est"], pz), muro, "canto exterior — borde de tarjeta contra el muro"],
     [sobre(T["--borde-est"], pz), pz, "canto interior — el mismo borde contra su relleno"],
     [sobre(T["--borde-est"], muro), muro, "caja sin fondo propio (.margen, .advertencia)"],
   ];
-  for (const [fg, bg, uso] of ESTRUCTURA) linea(ratio(fg, bg) >= 2.0, ratio(fg, bg), 2.0, uso);
+  for (const [fg, bg, uso] of ESTRUCTURA) linea(ratio(fg, bg) >= 1.6, ratio(fg, bg), 1.6, uso);
 }
 
 /* --- la ausencia se distingue por ALGUN canal (no depende del tema) --------------------------- */

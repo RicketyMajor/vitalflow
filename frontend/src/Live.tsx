@@ -6,6 +6,7 @@
    than captioning it. AC-I7 / AC-I8, `context/specs/alert-interface.md`. */
 
 import type { Live as L } from "./data";
+import { Par, Volver } from "./Nav";
 import { Ribbon } from "./Ribbon";
 import { Series } from "./Series";
 import { CAMPAIGN, claimOf, fmt, freshness, liveState, liveVerdict, ordinal, summarize } from "./season";
@@ -21,6 +22,8 @@ export function Live({ f }: { f: L }) {
 
   return (
     <section className="pantalla">
+      <Volver />
+      <Par code={f.code} aqui="ahora" />
       <article className="tablero">
         <div className="barra">
           <strong>{f.name ?? f.code}{f.comuna ? ` · ${f.comuna}` : ""}</strong>
@@ -112,12 +115,8 @@ export function Live({ f }: { f: L }) {
         </div>
       </article>
 
-      <p className="nota">
-        <a href={`#/${f.code}`}>
-          Ver la temporada {f.season - 1} cerrada, con lo ocurrido al lado de lo avisado →
-        </a>
-      </p>
-
+      {/* El enlace de prosa que estaba acá lo reemplaza el conmutador de arriba, por la misma
+          razón que en `Facility.tsx`: unía las dos pantallas del mismo servicio desde el pie. */}
       <p className="nota nota--pie">
         Esta pantalla afirma algo sobre una semana que todavía no ocurre: no hay resultado que poner
         al lado del aviso, y por eso la celda pronosticada va delineada y no rellena. La posición es

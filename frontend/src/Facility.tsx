@@ -10,6 +10,7 @@
    does not mean. */
 
 import type { Facility as F } from "./data";
+import { Par, Volver } from "./Nav";
 import { Ribbon } from "./Ribbon";
 import { Series } from "./Series";
 import { fmt, summarize, verdict } from "./season";
@@ -21,6 +22,8 @@ export function Facility({ f }: { f: F }) {
 
   return (
     <section className="pantalla">
+      <Volver />
+      <Par code={f.code} aqui="temporada" />
       <article className="tablero">
         <div className="barra">
           <strong>{f.name ?? f.code}{f.comuna ? ` · ${f.comuna}` : ""}</strong>
@@ -77,8 +80,8 @@ export function Facility({ f }: { f: F }) {
         </div>
       </article>
 
-      <p className="nota"><a href={`#/${f.code}/ahora`}>Ver el pronóstico de esta semana →</a></p>
-
+      {/* El enlace de prosa que estaba acá lo reemplaza el conmutador de arriba: era la única
+          unión entre las dos pantallas del mismo servicio y estaba al final de la página. */}
       <p className="nota nota--pie">
         Esta pantalla muestra una temporada que ya ocurrió, y por eso puede poner el resultado al
         lado del aviso. El producto en operación no puede: la semana evaluada todavía no sucede y

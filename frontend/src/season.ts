@@ -139,3 +139,11 @@ export function verdict({ watched, alerts, surges, caught }: Summary): [string, 
     `Semanas sobre el umbral de este servicio que el modelo señaló con dos semanas de ` +
     `anticipación. Las demás quedaron sin aviso.`];
 }
+
+/** ¿El visitante pidió que nada se mueva? Vive acá y no en un componente porque tiene DOS lectores
+    —la portada y el conmutador de rutas— y una segunda copia de un predicado es la deriva de
+    siempre, mudada de lugar (regla 41).
+    No se llama en tiempo de importación, así que `season.check.ts` la puede importar en Node sin
+    que `matchMedia` exista. */
+export const quieto = () =>
+  typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;

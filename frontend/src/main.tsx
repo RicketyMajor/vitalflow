@@ -16,15 +16,25 @@ import { Explorer } from "./Explorer";
 import { Facility } from "./Facility";
 import { Live } from "./Live";
 import { Metodo } from "./Metodo";
+import { Barra } from "./Nav";
 import { Portada } from "./Portada";
-import { freshness } from "./season";
+import { freshness, quieto } from "./season";
 import "./styles.css";
 import "./portada.css";
 
+/* El cambio de ruta era un corte seco: se reemplazaba el árbol y se hacía `scrollTo(0,0)`.
+   `startViewTransition` es API de plataforma —cero dependencias, ~6 líneas— y donde no existe
+   degrada exactamente al corte de antes. Nada depende de que la transición termine.
+   Se apaga con reduced-motion por la puerta de adelante: es un desplazamiento visual, no una
+   orientación, así que cae del lado `--mov` de la línea que `styles.css` traza sobre la PROPIEDAD. */
 function useHash() {
   const [hash, setHash] = useState(() => location.hash.slice(1) || "/");
   useEffect(() => {
-    const on = () => { setHash(location.hash.slice(1) || "/"); scrollTo(0, 0); };
+    const on = () => {
+      const ir = () => { setHash(location.hash.slice(1) || "/"); scrollTo(0, 0); };
+      if (quieto() || !document.startViewTransition) { ir(); return; }
+      document.startViewTransition(ir);
+    };
     addEventListener("hashchange", on);
     return () => removeEventListener("hashchange", on);
   }, []);
@@ -63,7 +73,10 @@ function App() {
   // surface. The new portada is full-bleed and owns its own widths.
   return (
     <div className={portada ? "hoja hoja--entrada" : metodo ? "hoja hoja--portada" : "hoja"}>
-      <Tema />
+      {/* AC-N1/N2 — en las SIETE rutas. Las dos narrativas la revelan al salir del primer
+          viewport; las otras cinco la llevan desde el primer píxel. El agujero que esto cierra:
+          `#/` y `#/metodo` no tenían salida persistente y sus puertas estaban al final. */}
+      <Barra narrativa={propio} />
       {!propio && (
         <header className="encabezado">
           <h1><a href="#/">VitalFlow</a> · explorador de servicios</h1>
@@ -72,12 +85,8 @@ function App() {
             umbral de cada servicio. Se puede ver al modelo acertar y se puede ver fallar.
           </p>
           {index && <Sello index={index} />}
-          <nav>
-            <a href="#/">Portada</a>
-            <a href="#/servicios" aria-current={servicios ? "page" : undefined}>Todos los servicios</a>
-            <a href="#/metodo">Método</a>
-            <a href="#/evidencia" aria-current={evidencia ? "page" : undefined}>Evidencia</a>
-          </nav>
+          {/* La `<nav>` que estaba acá se fue a la barra: dos navegaciones en la misma pantalla es
+              una de más, y la de abajo no existía en las dos superficies que más la necesitaban. */}
         </header>
       )}
 
@@ -91,41 +100,10 @@ function App() {
   );
 }
 
-/* The theme control. `styles.css` has declared `:root[data-theme="dark"]` and `[="light"]` since
-   2026-08-02 and NOTHING had ever written the attribute — the selectors were dead for five days.
-   AC-P9.
-
-   No attribute is written until the visitor chooses one, so the untouched default stays the
-   operating system's preference and the `prefers-color-scheme` block keeps ruling. Text rather
-   than a sun and a moon: this world has no icon system at all — it is text, monospace and
-   geometry — and inventing one for a single control would be the costume the craft floor warns
-   about. */
-function Tema() {
-  const [tema, setTema] = useState<string | null>(() => localStorage.getItem("tema"));
-
-  useEffect(() => {
-    const raiz = document.documentElement;
-    if (tema) raiz.setAttribute("data-theme", tema);
-    else raiz.removeAttribute("data-theme");
-  }, [tema]);
-
-  const oscuro = tema ? tema === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-
-  return (
-    <button
-      type="button"
-      className="tema"
-      aria-label={oscuro ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
-      onClick={() => {
-        const siguiente = oscuro ? "light" : "dark";
-        localStorage.setItem("tema", siguiente);
-        setTema(siguiente);
-      }}
-    >
-      {oscuro ? "claro" : "oscuro"}
-    </button>
-  );
-}
+/* El control de tema se fue a `Nav.tsx` el 2026-08-08: era el único `position: fixed` del sitio y
+   no tenía familia. Ahora vive en la barra, que es su familia. La razón por la que existe —los
+   selectores `[data-theme]` estuvieron cinco días muertos porque nada escribía el atributo, AC-P9—
+   viaja con él en su propio comentario. */
 
 /* AC-I9 — the trust mechanism the silent-facility audit asked for. A calm screen and a dead
    pipeline look identical, and until this line existed nothing on screen could tell them apart.

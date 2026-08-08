@@ -388,20 +388,20 @@ function Queda({ d }: { d: Datos }) {
         </p>
       </div>
 
-      <div className="salidas">
-        <a className="salida salida--fuerte" href="#/129103">
+      <div className="puertas">
+        <a className="puerta puerta--fuerte" href="#/129103">
           <b>El fallo</b>
           <span>Servicio 129103 · tres alzas y ningún aviso. La pantalla existe para mostrarlo.</span>
         </a>
-        <a className="salida" href="#/129104/ahora">
+        <a className="puerta" href="#/129104/ahora">
           <b>La semana que no ha ocurrido</b>
           <span>El pronóstico vivo de una urgencia, sobre una semana que todavía nadie observó.</span>
         </a>
-        <a className="salida" href="#/servicios">
+        <a className="puerta" href="#/servicios">
           <b>Los 180 servicios</b>
           <span>Cualquiera de ellos, su temporada completa, sus avisos y lo que pasó después.</span>
         </a>
-        <a className="salida" href="#/evidencia">
+        <a className="puerta" href="#/evidencia">
           <b>La evidencia</b>
           <span>Lo escrito antes de tocar los datos, y lo que volvió. Los fallos en la misma tabla.</span>
         </a>

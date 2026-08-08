@@ -14,19 +14,10 @@
  *  reproduce solo, nada loopea, y con `prefers-reduced-motion` cada acto renderiza en su estado
  *  final (el bloque al final del archivo). */
 
-/* ---- el control de tema — AC-P9 ------------------------------------------------------------
-   Texto y no un sol y una luna: este mundo no tiene sistema de iconos en ninguna de sus cinco
-   superficies, es texto, mono y geometría. Inventar uno para un solo control sería un disfraz. */
-.tema {
-  position: fixed; top: calc(var(--u) * 3); right: calc(var(--u) * 3); z-index: 30;
-  font-family: var(--mono); font-size: 11px; letter-spacing: 0.09em;
-  color: var(--rotulo); background: var(--pizarra);
-  border: 1px solid var(--borde-est); border-radius: var(--r-chico);
-  padding: calc(var(--u) * 1.5) calc(var(--u) * 2.5); cursor: pointer;
-  /* color y borde: orienta, no desplaza — sigue corriendo con reduced-motion */
-  transition: color var(--dur-orienta) ease, border-color var(--dur-orienta) ease;
-}
-.tema:hover { color: var(--tinta); border-color: var(--rotulo); }
+/* El control de tema vivía acá como `.tema`, flotando `fixed` arriba a la derecha sin familia.
+   El 2026-08-08 se mudó a `.barra-sitio__tema` en `styles.css`: ahora es un ítem de la barra, que
+   está en las siete rutas, en vez de un botón suelto que sólo esta superficie dibujaba. AC-P9
+   sigue cumpliéndose en su nuevo lugar. */
 
 /* ---- la hoja ---------------------------------------------------------------------------------
    A sangre. Los márgenes negativos cancelan el padding global del `body`, que existe para las
@@ -48,12 +39,13 @@
 }
 
 /* ---- acto 1: el país -------------------------------------------------------------------------
-   La sección mide tres viewports y su contenido queda pegado arriba: el scroll de esos tres
-   viewports es lo que corre la temporada. `--semana` la escribe `useSweep`, una sola propiedad
-   para las 832 celdas. */
-.pais { height: 320vh; position: relative; }
+   La sección mide lo que mide su contenido. Medía 320vh y quedaba pegada arriba, y esos tres
+   viewports de scroll vacío eran el peaje que el barrido cobraba por existir. Ahora el barrido lo
+   dispara `useReveal` al entrar en vista: la animación llega cuando llegas, en vez de cobrarse.
+   `--semana` la sigue escribiendo una sola propiedad para las 832 celdas. */
+.pais { position: relative; }
 .pais__fijo {
-  position: sticky; top: 0; min-height: 100vh;
+  min-height: 100vh;
   display: flex; flex-direction: column; justify-content: center;
   gap: calc(var(--u) * 6);
   padding: calc(var(--u) * 8) calc(var(--u) * 6);
@@ -61,6 +53,7 @@
 }
 
 .pais__titulo {
+  font-family: var(--serif);
   font-size: clamp(2rem, 5.4vw, 4.25rem); line-height: 1.04; letter-spacing: -0.032em;
   font-weight: 600; text-wrap: balance; max-width: 20ch;
 }
@@ -69,6 +62,14 @@
   font-size: clamp(0.95rem, 1.7vw, 1.4rem); line-height: 1.35; letter-spacing: -0.01em;
   font-weight: 400; color: var(--rotulo); max-width: 34ch;
 }
+
+/* La identidad, en prosa y a cuerpo de lectura. No es `.nota`: la capa de anotación es mono, 11px
+   y versalita, y esto es la frase que decide si alguien que llegó en frío sigue leyendo. */
+.pais__identidad {
+  max-width: 58ch; font-size: 15.5px; line-height: 1.6; color: var(--rotulo);
+  text-wrap: pretty; margin-top: calc(var(--u) * 2);
+}
+.pais__identidad b { color: var(--tinta); font-weight: 600; }
 
 .pais__figura { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
 
@@ -176,7 +177,10 @@
   display: flex; flex-direction: column; gap: calc(var(--u) * 5);
   border-top: 1px solid var(--borde);
 }
+/* Las tres frases a escala de exhibición van en serif por la misma razón que los titulares: son
+   display, no prosa. Dejarlas en `--prosa` haría que el serif se leyera aplicado al azar. */
 .escala__frase {
+  font-family: var(--serif);
   font-size: clamp(1.35rem, 3.1vw, 2.5rem); line-height: 1.32; letter-spacing: -0.022em;
   font-weight: 400; text-wrap: pretty; max-width: 26ch;
 }
@@ -192,16 +196,16 @@
    habló. La semana reclamada usa el vocabulario que la pantalla en vivo ya fijó —
    **contorno = está afirmado · lleno = ocurrió** — para que quien siga hasta `#/<code>/ahora`
    llegue sabiéndolo leer. */
-.mecanismo { height: 300vh; position: relative; }
+.mecanismo { position: relative; }
 .mecanismo--vacio { height: 0; }
 .mecanismo__fijo {
-  position: sticky; top: 0; min-height: 100vh;
   display: flex; flex-direction: column; justify-content: center;
   gap: calc(var(--u) * 7);
-  padding: calc(var(--u) * 8) calc(var(--u) * 6);
+  padding: calc(var(--u) * 24) calc(var(--u) * 6);
   max-width: 1180px; margin: 0 auto;
 }
 .mecanismo__titulo {
+  font-family: var(--serif);
   font-size: clamp(1.6rem, 4vw, 3.1rem); line-height: 1.08; letter-spacing: -0.03em;
   font-weight: 600; text-wrap: balance; max-width: 18ch;
 }
@@ -271,6 +275,7 @@
   border-top: 1px solid var(--borde);
 }
 .que__titulo {
+  font-family: var(--serif);
   font-size: clamp(1.5rem, 3.4vw, 2.6rem); line-height: 1.1; letter-spacing: -0.028em;
   font-weight: 600; margin-bottom: calc(var(--u) * 2);
 }
@@ -297,26 +302,13 @@
   border-top: 1px solid var(--borde);
 }
 .acceso__titulo {
+  font-family: var(--serif);
   font-size: clamp(1.5rem, 3.4vw, 2.6rem); line-height: 1.1; letter-spacing: -0.028em;
   font-weight: 600;
 }
-.acceso__vias { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--u) * 4); }
-.acceso__via {
-  display: flex; flex-direction: column; gap: calc(var(--u) * 2);
-  padding: calc(var(--u) * 5);
-  border: 1px solid var(--borde-est); border-radius: var(--r-medio);
-  background: var(--pizarra); text-decoration: none;
-  /* El caso instructivo del reparto: UNA declaración partida en los dos canales. El borde orienta
-     y sobrevive; el desplazamiento es decorativo y se apaga (`transform: none` en el bloque de
-     reduced-motion de `styles.css`, porque acelerarlo a 0s igual movería la tarjeta 2px). */
-  transition: border-color var(--dur-orienta) ease,
-              transform calc(160ms * var(--mov)) cubic-bezier(0.16, 1, 0.3, 1);
-}
-.acceso__via:hover { border-color: var(--rotulo); transform: translateY(-2px); }
-.acceso__via b { font-size: 15px; }
-.acceso__via span { font-size: 13px; line-height: 1.55; color: var(--rotulo); }
-.acceso__via--fuerte { border-color: var(--alerta); }
-.acceso__via--fuerte b { color: var(--alerta); }
+/* `.acceso__vias` / `.acceso__via` se unificaron en `.puertas` / `.puerta` (`styles.css`) el
+   2026-08-08: eran el mismo objeto que `.salida` con otro hover. La fuga del acento que tenían
+   —borde y rótulo en `--alerta` sobre un BOTÓN— se cerró ahí mismo. AC-N6, AC-N7. */
 
 /* ---- responsive -------------------------------------------------------------------------------
    El listón es vertical por naturaleza: Chile es una cinta y el caso raro es el desktop ancho, no
@@ -325,7 +317,7 @@
   .pais__cinta { --etiqueta: 104px; }
   .pais__lectura { grid-template-columns: 1fr; gap: calc(var(--u) * 4); }
   .mecanismo__tiempos, .que__palancas { grid-template-columns: 1fr; gap: calc(var(--u) * 4); }
-  .acceso__vias { grid-template-columns: 1fr; }
+  .puertas { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 620px) {
@@ -348,7 +340,6 @@
   .pais__campana i { font-size: 9px; }
   .mecanismo__grafico { height: 190px; }
   .mecanismo__umbral b { font-size: 9.5px; }
-  .tema { top: calc(var(--u) * 2); right: calc(var(--u) * 2); }
 }
 
 /* ---- sin movimiento ---------------------------------------------------------------------------
@@ -356,8 +347,8 @@
    su valor final, y acá se sueltan las secciones para que no queden tres viewports de scroll vacío
    detrás de un contenido que ya no se mueve. */
 @media (prefers-reduced-motion: reduce) {
-  .pais, .mecanismo { height: auto; }
-  .pais__fijo, .mecanismo__fijo { position: static; min-height: 0; }
+  /* Acá había dos líneas que soltaban `.pais` / `.mecanismo` de sus alturas de 320vh / 300vh y
+     desprendían sus paneles `sticky`. Se fueron con las alturas: ya no hay nada que soltar. */
   .pais__ahora { display: none; }
-  .acceso__via:hover { transform: none; }
+  .puerta:hover { transform: none; }
 }

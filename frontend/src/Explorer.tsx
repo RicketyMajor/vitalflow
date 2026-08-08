@@ -2,11 +2,16 @@
    The index carries no per-week array (asserted in `export_frontend.py`), so this list is the
    whole first paint: 39 KB, not 180 files. */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Index } from "./data";
 
 export function Explorer({ index }: { index: Index }) {
-  const [q, setQ] = useState("");
+  /* AC-N4 — la búsqueda sobrevive la ida y la vuelta. Mirar un hospital y volver obligaba a
+     re-escribirla, que es el momento exacto en que alguien abandona un listado de 180.
+     `sessionStorage` y no la URL: una lista filtrada compartible no se pidió, y meterla en el hash
+     obliga a parsear una query en un router de treinta líneas cuyo valor es que no las tiene. */
+  const [q, setQ] = useState(() => sessionStorage.getItem("busqueda") ?? "");
+  useEffect(() => { sessionStorage.setItem("busqueda", q); }, [q]);
 
   const rows = useMemo(() => {
     const needle = fold(q.trim());
