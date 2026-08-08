@@ -23,7 +23,8 @@
   color: var(--rotulo); background: var(--pizarra);
   border: 1px solid var(--borde); border-radius: var(--r-chico);
   padding: calc(var(--u) * 1.5) calc(var(--u) * 2.5); cursor: pointer;
-  transition: color 140ms ease, border-color 140ms ease;
+  /* color y borde: orienta, no desplaza — sigue corriendo con reduced-motion */
+  transition: color var(--dur-orienta) ease, border-color var(--dur-orienta) ease;
 }
 .tema:hover { color: var(--tinta); border-color: var(--rotulo); }
 
@@ -121,17 +122,27 @@
 }
 
 /* Una celda: tinta a la opacidad de su propio valor, encendida cuando el barrido la pasa.
-   El `999` de respaldo es lo que se ve si el JS no corre nunca — la temporada completa, quieta. */
+   El `999` de respaldo es lo que se ve si el JS no corre nunca — la temporada completa, quieta.
+
+   ⚠ EL PISO SUBIÓ DE 0.05 A 0.22 el 2026-08-08, y la razón es un defecto medido. `--v` está
+   normalizado contra el pico de la PROPIA región (AC-P4), así que las dieciséis filas tienen, por
+   construcción, una celda en `--v: 0`. A opacidad 0.05 esa celda medía **1.10:1** contra su propio
+   pozo: la depresión de verano de cada región se leía como dato faltante. Es el defecto 3 del
+   2026-08-07 al revés — allá un hueco se leía como valor chico, acá un valor chico se lee como
+   hueco. Regla 25, sexta vez.
+   Con 0.22 el mínimo mide 1.57:1 en claro y 1.92:1 en oscuro. El techo sigue en 1.00; lo único
+   que se comprime es el rango bajo, que es el precio correcto por no mentir sobre la ausencia. */
 .pais__celda {
   --on: clamp(0, calc(var(--semana, 999) - var(--w) + 1.5), 1);
   background: var(--tinta);
-  opacity: calc((0.05 + 0.95 * var(--v)) * var(--on));
+  opacity: calc((0.22 + 0.78 * var(--v)) * var(--on));
 }
 /* Regla 34: una semana que nadie reportó no es una semana sin atenciones. Se dibuja como hueco
-   marcado, nunca como demanda cero. Hoy no hay ninguna; el día que aparezca no mentirá. */
+   marcado, nunca como demanda cero. Hoy no hay ninguna; el día que aparezca no mentirá.
+   Usa `--rayado` de `styles.css`: el mismo significado tenía dos dibujos distintos en las dos
+   superficies, y el de la cinta operativa era invisible. Una sola definición. */
 .pais__celda--vacia {
-  background: repeating-linear-gradient(
-    45deg, transparent 0 2px, color-mix(in oklab, var(--tenue) 40%, transparent) 2px 3px);
+  background: var(--rayado);
   opacity: var(--on);
 }
 
@@ -295,7 +306,11 @@
   padding: calc(var(--u) * 5);
   border: 1px solid var(--borde); border-radius: var(--r-medio);
   background: var(--pizarra); text-decoration: none;
-  transition: border-color 160ms ease, transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* El caso instructivo del reparto: UNA declaración partida en los dos canales. El borde orienta
+     y sobrevive; el desplazamiento es decorativo y se apaga (`transform: none` en el bloque de
+     reduced-motion de `styles.css`, porque acelerarlo a 0s igual movería la tarjeta 2px). */
+  transition: border-color var(--dur-orienta) ease,
+              transform calc(160ms * var(--mov)) cubic-bezier(0.16, 1, 0.3, 1);
 }
 .acceso__via:hover { border-color: var(--rotulo); transform: translateY(-2px); }
 .acceso__via b { font-size: 15px; }

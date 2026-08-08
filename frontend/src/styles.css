@@ -17,8 +17,16 @@
   --borde:     rgba(20, 26, 24, 0.11);
   --borde-int: rgba(20, 26, 24, 0.07);
   --tinta:     #141a18;
-  --rotulo:    #56635e;
-  --tenue:     #8b968f;
+  /* La rampa de grises se RE-ESPACIÓ el 2026-08-08 a objetivos medidos, no elegidos a mano.
+     `--tenue` estaba en 2.59:1 contra el muro y 2.89:1 contra la pizarra — falla 4.5:1 y lleva
+     texto que alguien lee: `.nota`, `.cinta__eje`, `.leyenda`, `.pais__eje`. Se movió por
+     interpolación hacia `--tinta` en sRGB, así que conserva el matiz verde-frío.
+     Objetivos: rótulo >= 7.0, tenue >= 4.6, y los tres escalones a >= 1.3 ENTRE SÍ — sin esa
+     última condición la forma más barata de pasar el umbral es colapsar la rampa en dos grises.
+     Medido por `contraste.check.ts`, que lee ESTE archivo. Costo aceptado: la capa de anotación
+     queda algo más presente de lo que era; 11.5px no califica para el umbral de texto grande. */
+  --rotulo:    #46514d;   /* era #56635e — 7.00 / 7.82 */
+  --tenue:     #636c67;   /* era #8b968f — 4.61 / 5.15 */
   --alerta:    #1f4a7a;   /* MINSAL institutional blue. THE ONLY ACCENT. */
   --alerta-df: rgba(31, 74, 122, 0.12);
   --campana:   rgba(31, 74, 122, 0.075);
@@ -30,26 +38,59 @@
   --u: 4px;
   --r-chico: 3px;
   --r-medio: 6px;
+
+  /* ---- movimiento -------------------------------------------------------------------------
+     DOS canales, y la línea se traza sobre la PROPIEDAD, no sobre el gusto:
+
+       --dur-orienta  transiciones de color, borde, contorno y sombra. Dicen «esto es lo que
+                      estás señalando». Nada se desplaza. SC 2.3.3 nunca pidió apagarlas, así
+                      que SOBREVIVEN a `prefers-reduced-motion`.
+       --mov          factor de lo decorativo: transform, opacity, height, background-size y
+                      todo lo guiado por scroll. Va a 0 bajo reduced-motion, con lo cual las
+                      animaciones COMPLETAN AL INSTANTE en vez de no arrancar nunca.
+
+     Esa diferencia es la razón de existir del token. Lo que había antes era
+     `* { animation: none !important }`, y resultó ser load-bearing por accidente: `brota` deja
+     las barras del acto 1 de `#/metodo` en `scaleY(0)`, y lo único que las hacía visibles bajo
+     reduced-motion era que ese `!important` borrara la animación. Con `--mov: 0` la animación
+     corre en 0s y aterriza en su estado final, que es el estado visible. */
+  --dur-orienta: 160ms;
+  --mov: 1;
+
+  /* ---- la ausencia se dibuja, no se insinúa ------------------------------------------------
+     Regla 34: una semana que nadie reportó no es una semana sin atenciones. Estaba pintada con
+     `--hueco` plano, que contra `--borde` (la semana observada sin alza) mide **1.03:1** en
+     claro — o sea, «nadie miró» y «miramos y no pasó nada» eran el mismo gris, y la leyenda las
+     declara como dos llaves distintas. El canal que las separa es GEOMETRÍA, no luminancia:
+     subir el brillo del pozo lo volvería ruidoso en 832 celdas (AC-E4 tomó esta misma decisión
+     cuando dos canales no podían ser ambos tono).
+     Una sola definición para las dos superficies: `portada.css` ya rayaba la ausencia y
+     `styles.css` no, así que el mismo significado tenía dos dibujos y uno era invisible. */
+  --rayado: repeating-linear-gradient(45deg,
+              var(--hueco) 0 2px,
+              color-mix(in oklab, var(--rotulo) 45%, var(--hueco)) 2px 3.5px);
 }
 
+/* Los tres bloques de tema mueven `--rotulo` y `--tenue` con el mismo criterio medido que `:root`.
+   En oscuro el movimiento es mínimo (ya estaba en 4.15, no en 2.59); en claro es real. */
 @media (prefers-color-scheme: dark) {
   :root {
     --muro: #0f1412; --pizarra: #161d1a; --hueco: #1e2623;
     --borde: rgba(232,237,234,0.10); --borde-int: rgba(232,237,234,0.06);
-    --tinta: #e8edea; --rotulo: #96a49d; --tenue: #6d7a74;
+    --tinta: #e8edea; --rotulo: #9ba9a2; --tenue: #7b8782;
     --alerta: #7fb0e6; --alerta-df: rgba(127,176,230,0.16); --campana: rgba(127,176,230,0.10); --opera: rgba(232,237,234,0.045);
   }
 }
 :root[data-theme="dark"] {
   --muro: #0f1412; --pizarra: #161d1a; --hueco: #1e2623;
   --borde: rgba(232,237,234,0.10); --borde-int: rgba(232,237,234,0.06);
-  --tinta: #e8edea; --rotulo: #96a49d; --tenue: #6d7a74;
+  --tinta: #e8edea; --rotulo: #9ba9a2; --tenue: #7b8782;
   --alerta: #7fb0e6; --alerta-df: rgba(127,176,230,0.16); --campana: rgba(127,176,230,0.10); --opera: rgba(232,237,234,0.045);
 }
 :root[data-theme="light"] {
   --muro: #e9edea; --pizarra: #f7f9f7; --hueco: #dfe4e1;
   --borde: rgba(20,26,24,0.11); --borde-int: rgba(20,26,24,0.07);
-  --tinta: #141a18; --rotulo: #56635e; --tenue: #8b968f;
+  --tinta: #141a18; --rotulo: #46514d; --tenue: #636c67;
   --alerta: #1f4a7a; --alerta-df: rgba(31,74,122,0.12); --campana: rgba(31,74,122,0.075); --opera: rgba(20,26,24,0.035);
 }
 
@@ -74,7 +115,13 @@ a { color: inherit; }
 a:focus-visible, [tabindex]:focus-visible, input:focus-visible, button:focus-visible {
   outline: 2px solid var(--alerta); outline-offset: 2px; border-radius: var(--r-chico);
 }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+/* `--mov: 0` apaga lo decorativo haciéndolo COMPLETAR en 0s, no borrándolo. Ver el bloque de
+   movimiento en `:root`: borrar la animación de `brota` era lo único que mantenía visibles las seis
+   barras del acto 1, y eso no debe depender de un `!important` global que nadie adivina.
+   Las transiciones de color (`--dur-orienta`) siguen corriendo a propósito: no desplazan nada.
+   Donde lo decorativo es un DESPLAZAMIENTO no basta con acelerarlo a 0s — no debe ocurrir. Esa
+   regla la lleva `portada.css` en su propio bloque, junto a la clase que la necesita. */
+@media (prefers-reduced-motion: reduce) { :root { --mov: 0; } }
 
 /* ---- annotation layer: ABOUT the product, never part of it ---------------- */
 .nota { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.07em;
@@ -150,8 +197,14 @@ a:focus-visible, [tabindex]:focus-visible, input:focus-visible, button:focus-vis
                  flex-wrap: wrap; }
 .cinta__pista { display: flex; gap: 2px; align-items: flex-end; min-height: 34px;
                 overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; }
+/* La celda por defecto es SIN DATO, y ahora se dibuja como tal. En plano medía 1.03:1 contra
+   `.semana--revisada`, así que las dos únicas celdas apagadas de la cinta — «nadie reportó» y
+   «se observó y no hubo alza» — eran indistinguibles. `--rayado` es el mismo trazo que la portada
+   ya usaba para lo mismo. */
 .semana { flex: 1 1 0; min-width: 6px; height: 26px; border-radius: 1px;
-          background: var(--hueco); position: relative; }
+          background: var(--rayado); position: relative; }
+/* El shorthand `background` resetea `background-image`, así que cada estado que se pinta borra el
+   rayado por sí solo. Es la razón por la que esto funciona sin un `--sindato` explícito. */
 .semana--revisada { background: var(--borde); }
 /* The campaign band washes OVER the cell, not behind it: `z-index:-1` (as in the maquette) puts it
    behind `.tablero`'s own background, where it is invisible. At 5% the wash reads as a band either
@@ -190,7 +243,9 @@ a:focus-visible, [tabindex]:focus-visible, input:focus-visible, button:focus-vis
            font-family: var(--mono); font-size: 11px; color: var(--tenue);
            letter-spacing: 0.03em; }
 .leyenda span { display: flex; align-items: center; gap: calc(var(--u) * 1.5); }
-.llave { width: 8px; height: 10px; border-radius: 1px; background: var(--hueco); }
+/* La llave de «sin dato» tiene que llevar el mismo trazo que la celda que describe, o la leyenda
+   explica una cosa y la cinta dibuja otra. */
+.llave { width: 8px; height: 10px; border-radius: 1px; background: var(--rayado); }
 .llave--revisada { background: var(--borde); }
 .llave--alertada { background: var(--alerta); }
 .llave--alza { background: var(--tinta); }
@@ -324,8 +379,9 @@ code { font-family: var(--mono); font-size: 0.92em; color: var(--tinta);
 .despliega { font-family: var(--mono); font-size: 0.94em; color: var(--tinta); font-weight: 600;
              font-variant-numeric: tabular-nums;
              box-shadow: inset 0 -0.34em 0 -0.16em var(--alerta-df);
-             transition: box-shadow 180ms cubic-bezier(0.2, 0.7, 0.3, 1),
-                         color 180ms cubic-bezier(0.2, 0.7, 0.3, 1); }
+             /* color y sombra: orienta, no desplaza — sobrevive a reduced-motion */
+             transition: box-shadow var(--dur-orienta) cubic-bezier(0.2, 0.7, 0.3, 1),
+                         color var(--dur-orienta) cubic-bezier(0.2, 0.7, 0.3, 1); }
 .pliego:has(.despliega:hover) .despliega { box-shadow: inset 0 -0.34em 0 -0.16em var(--alerta);
                                            color: var(--alerta); }
 
@@ -498,13 +554,21 @@ code { font-family: var(--mono); font-size: 0.92em; color: var(--tinta);
                       min-height: 196px; }
 .columna { flex: 1 1 0; display: flex; flex-direction: column; align-items: stretch;
            gap: calc(var(--u) * 1.5); }
+/* `brota` es decorativa y va por `--mov`. Con `--mov: 0` la animación dura 0s y aterriza en su
+   estado final — que es el estado VISIBLE. Antes esto dependía de que un `!important` global
+   borrara la animación entera; si alguien quitaba esa línea sin saberlo, las seis barras
+   desaparecían bajo reduced-motion. Ahora la dependencia es explícita. */
 .columna b { display: block; background: var(--borde); border-radius: 1px;
-             transform-origin: bottom; animation: brota 0.75s cubic-bezier(0.16, 1, 0.3, 1) both; }
-.columna:nth-child(2) b { animation-delay: 0.06s; }
-.columna:nth-child(3) b { animation-delay: 0.12s; }
-.columna:nth-child(4) b { animation-delay: 0.18s; }
-.columna:nth-child(5) b { animation-delay: 0.24s; }
-.columna:nth-child(6) b { animation-delay: 0.30s; }
+             transform-origin: bottom;
+             animation: brota calc(0.75s * var(--mov)) cubic-bezier(0.16, 1, 0.3, 1) both; }
+/* El escalonado va por `--mov` igual que la duración. `both` incluye `backwards`, así que durante
+   el delay la barra se queda en `scaleY(0)`: un delay sin factorizar dejaría las seis columnas
+   invisibles hasta 0.30s DESPUÉS de que la animación ya no exista. */
+.columna:nth-child(2) b { animation-delay: calc(0.06s * var(--mov)); }
+.columna:nth-child(3) b { animation-delay: calc(0.12s * var(--mov)); }
+.columna:nth-child(4) b { animation-delay: calc(0.18s * var(--mov)); }
+.columna:nth-child(5) b { animation-delay: calc(0.24s * var(--mov)); }
+.columna:nth-child(6) b { animation-delay: calc(0.30s * var(--mov)); }
 /* el hueco medido se dibuja como hueco: el proyecto nunca publicó un R² para h>=4, sabe que es
    negativo. Inventar un número aquí sería la única mentira posible en esta figura.
    Relleno leía como «un valor pequeño»; delineado lee como «no hay valor», que es la misma
@@ -539,8 +603,12 @@ code { font-family: var(--mono); font-size: 0.92em; color: var(--tinta);
                         font-family: var(--mono); font-size: 12.5px; color: var(--rotulo);
                         letter-spacing: 0.03em; font-variant-numeric: tabular-nums; }
 .instrumento__lectura b { color: var(--tinta); font-size: 15px; }
-.instrumento__lectura span + span::before, .instrumento__lectura b + span::before,
-.instrumento__lectura span + i::before { content: "· "; color: var(--tenue); }
+/* El separador NO va antes del `<i>`. A 390px la lectura envuelve y el `<i>` cae a su propia línea,
+   que entonces arrancaba con un `·` colgando de la nada. Se borra en vez de parcharse con un
+   breakpoint: el `<i>` ya viene en el acento y en negrita, así que el `gap` del flex lo separa de
+   sobra y a 1440 el cambio no se nota. Encontrado abriéndolo a 390; el build estaba verde. */
+.instrumento__lectura span + span::before, .instrumento__lectura b + span::before
+  { content: "· "; color: var(--tenue); }
 .instrumento__lectura i { font-style: normal; color: var(--alerta); font-weight: 600; }
 .instrumento__glosa { color: var(--rotulo); max-width: 62ch; text-wrap: pretty;
                       min-height: 3em; }
@@ -567,7 +635,10 @@ code { font-family: var(--mono); font-size: 0.92em; color: var(--tinta);
 .tachar { background-image: linear-gradient(var(--tenue), var(--tenue));
           background-repeat: no-repeat; background-position: 0 52%; background-size: 0 1px;
           -webkit-box-decoration-break: clone; box-decoration-break: clone;
-          transition: background-size 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.15s; }
+          /* el trazo del tachado es decorativo: con `--mov: 0` aparece de golpe cuando llega
+             `.vista`, y la frase se lee tachada igual — que es lo que la frase significa */
+          transition: background-size calc(0.9s * var(--mov)) cubic-bezier(0.16, 1, 0.3, 1)
+                      calc(0.15s * var(--mov)); }
 .vista .tachar { background-size: 100% 1px; }
 
 .renuncia__medida { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
@@ -635,6 +706,12 @@ code { font-family: var(--mono); font-size: 0.92em; color: var(--tinta);
 .reparto__pista { display: flex; gap: 2px; height: 34px; }
 .reparto__ambul { background: var(--hueco); border-radius: 1px; }
 .reparto__hosp { background: var(--alerta); border-radius: 1px; }
+/* Los cuatro servicios que no son ni UEH ni ambulatorios. Son el 0.6% del panel, así que sin un
+   mínimo el segmento mide menos de un píxel — y omitirlo era justo lo que hacía la versión vieja:
+   dos segmentos al 70.6/29.4 que sumaban 100 metiendo estos cuatro del lado avisado.
+   Se dibuja rayado porque es la misma clase de cosa que la semana sin dato: no es una categoría,
+   es lo que quedó sin clasificar. */
+.reparto__otros { background: var(--rayado); border-radius: 1px; min-width: 3px; }
 .reparto__claves { display: flex; flex-direction: column; gap: calc(var(--u) * 1.5);
                    font-family: var(--mono); font-size: 11.5px; color: var(--tenue);
                    letter-spacing: 0.03em; }

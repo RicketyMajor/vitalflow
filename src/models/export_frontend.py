@@ -113,8 +113,12 @@ def build(path=ALERT_LIST):
     season = int(alerts["year"].iloc[0])
     assert alerts["year"].nunique() == 1, "one season per export; re-run write_alert_list per year"
 
-    panel = load_panel()
-    panel = panel[panel["EstablecimientoCodigo"].isin(hospital_er_facilities(panel))]
+    # `completo` is kept because `build_cobertura` is the one reading here that is ABOUT the
+    # facilities this export leaves out. Scoping first and passing the scoped frame down is how the
+    # first version of it silently reported a 0% ambulatory share -- caught by `demo()`, not by the
+    # build, which is exactly why that assert exists.
+    completo = load_panel()
+    panel = completo[completo["EstablecimientoCodigo"].isin(hospital_er_facilities(completo))]
     thr = surge_thresholds(panel, season)
     meta = panel.groupby("EstablecimientoCodigo")[list(META)].first().rename(columns=META)
 
@@ -144,13 +148,65 @@ def build(path=ALERT_LIST):
         })
 
     index = {"season": season, "retrospective": True, **release_stamp(panel), "facilities": index}
-    return index, payloads, build_nacional(panel, season, index)
+    return index, payloads, build_nacional(panel, season, index, completo)
 
 
 SEASON_WEEKS = 52  # week 53 is a DEIS bucket the canonical loader excludes -- see refresh.coverage
 
 
-def build_nacional(panel, season, index):
+def build_cobertura(panel):
+    """Who is in the panel, who gets alerted, and how much volume the excluded ones carry.
+
+    **Class A of backlog item G**, and the only class that drifts with nobody watching: these
+    numbers change on the weekly CI refresh, which downloads a revised DEIS release and commits
+    the payloads without any frontend check running. `#/metodo` and `#/evidencia` state them in
+    prose, so hand-writing them is a silent-drift channel by construction.
+
+    **It had already drifted, which is how this function came to exist.** On 2026-08-08 the pages
+    said "446 ambulatorios ... 73.7% de las atenciones". Measured against the panel that same day:
+    **448** ambulatory facilities, and **72.6%** of respiratory attentions over the whole panel --
+    or **75.3%** over 2025 alone. The published figure matched neither window, and the page never
+    said which window it meant. A figure whose window is not named cannot be reproduced; that is
+    the project's rule 0 on a different axis.
+
+    **Three classes, not two.** 180 UEH + 448 ambulatory is 628, not 632: four facilities are
+    neither (two `Urgencia Especializada`, two with no `TipoUrgencia` at all). The old figure drew
+    a two-segment bar at 70.6/29.4, which folded those four -- plus two more -- into the alerted
+    segment and overstated it. Emitting `otros` is what stops the bar from having to lie to close.
+
+    The window is the whole panel, and it is emitted so the page can name it: the sentence this
+    feeds is about the facilities the model *trains on*, not about one served season.
+    """
+    tipos = panel.groupby("EstablecimientoCodigo")["TipoUrgencia"].first().astype(str)
+    ueh = set(hospital_er_facilities(panel))
+    # Matched on the text, like `hospital_er_facilities`: the raw data carries both
+    # "Urgencia ambulatoria (SAR)" and "Urgencia Ambulatoria (SAR)".
+    amb = set(tipos.index[tipos.str.contains("ambulator", case=False, na=False)]) - ueh
+    otros = set(tipos.index) - ueh - amb
+
+    # This function is the ONLY reading in the export that is about the facilities the product
+    # leaves out, so it is the only one that must never receive the hospital-ER-scoped frame.
+    # It did, on the first run, and reported a 0% ambulatory share -- a number that is wrong in a
+    # direction nobody would question, because "the excluded ones carry 0%" reads like good news.
+    assert amb, ("build_cobertura received a scoped panel: it needs the WHOLE panel, not just the "
+                 "hospital ERs. See `build()`, where `completo` exists for this.")
+
+    vol = panel.groupby("EstablecimientoCodigo")[Y].sum()
+    total = float(vol.sum())
+    return {
+        "panel": int(len(tipos)),
+        "ueh": len(ueh),
+        "ambulatorios": len(amb),
+        "otros": len(otros),
+        # One decimal: the project reports two significant figures and this is a share, not a
+        # model output. Rounding is `round`, never a ceiling -- nothing here rounds up.
+        "share_ambulatorio": round(100.0 * float(vol.reindex(sorted(amb)).sum()) / total, 1),
+        "share_ueh": round(100.0 * float(vol.reindex(sorted(ueh)).sum()) / total, 1),
+        "anios": [int(panel["Anio"].min()), int(panel["Anio"].max())],
+    }
+
+
+def build_nacional(panel, season, index, completo=None):
     """The season as the country saw it: every region, north to south, by epidemiological week.
 
     Written for the portada (`specs/portada.md`), and the reason its figures are not hand-written.
@@ -198,6 +254,9 @@ def build_nacional(panel, season, index):
         "servicios": len(index["facilities"]),
         "alertas": sum(f["alerts"] for f in index["facilities"]),
         "alzas": sum(f["surges"] for f in index["facilities"]),
+        # Item G, class A. Reads `completo` -- the UNSCOPED panel -- because it is about the
+        # facilities this export leaves out. `panel` here is hospital ERs only.
+        "cobertura": build_cobertura(completo if completo is not None else panel),
     }
 
 
@@ -329,6 +388,24 @@ def demo(out=OUT):
     norte, sur = nac["regiones"][0]["nombre"], nac["regiones"][-1]["nombre"]
     assert "Arica" in norte, f"the first region is {norte}, not the northern one"
     assert "Magallanes" in sur, f"the last region is {sur}, not the southern one"
+
+    # AC-G1 -- item G, class A. The three counts must EXHAUST the panel. The published figure was
+    # a two-way split (446 / the rest) that did not close: it folded the four uncategorised
+    # facilities into the alerted segment and overstated it. This assert is what makes that
+    # impossible to reintroduce.
+    cob = nac["cobertura"]
+    assert cob["ueh"] + cob["ambulatorios"] + cob["otros"] == cob["panel"], (
+        f"cobertura does not close: {cob['ueh']} + {cob['ambulatorios']} + {cob['otros']} "
+        f"!= {cob['panel']}")
+    assert cob["ueh"] == len(index["facilities"]), (
+        f"cobertura says {cob['ueh']} hospital ERs, the index has {len(index['facilities'])}")
+    assert 0 < cob["share_ambulatorio"] < 100, "the ambulatory volume share is not a share"
+    assert abs(cob["share_ambulatorio"] + cob["share_ueh"] - 100) < 1.0, (
+        "the volume shares do not add up -- `otros` carries the remainder and it should be tiny")
+    print(f"OK  cobertura · {cob['panel']} en el panel = {cob['ueh']} UEH + "
+          f"{cob['ambulatorios']} ambulatorios + {cob['otros']} otros · "
+          f"ambulatorios cargan {cob['share_ambulatorio']}% del volumen "
+          f"({cob['anios'][0]}-{cob['anios'][1]})")
 
     panel = load_panel()
     thr = surge_thresholds(panel, int(alerts["year"].iloc[0]))

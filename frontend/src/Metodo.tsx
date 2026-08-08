@@ -15,7 +15,23 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { Index } from "./data";
+import type { Index, Nacional } from "./data";
+
+/* Backlog item G, clase A — lo que el refresco semanal mueve, en CI y sin nadie mirando.
+   Estas cifras estaban escritas a mano y YA habían derivado: la página decía «446 ambulatorios
+   cargan el 73.7%» cuando el panel tenía **448** cargando **72.6%**, y no nombraba la ventana del
+   porcentaje. Leídas al renderizar no queda nada que desincronizar.
+   La clase C — calibración, ablación, el IC del abandono — sigue como literal a propósito: nada la
+   recomputa nunca, así que emitirla desde un pipeline le inventaría una procedencia que no tiene. */
+type Datos = { index: Index; nacional: Nacional };
+
+/** Semanas-servicio efectivamente puntuadas, que es el denominador honesto: no todos los servicios
+    tienen 52 semanas (105107 tiene 37). `180 x 52` habría sido una división cómoda y falsa. */
+const semanasServicio = (d: Datos) => d.index.facilities.reduce((a, f) => a + f.weeks, 0);
+
+/** Un ancho de barra derivado del conteo, para que los segmentos cierren en vez de que alguien
+    escriba tres porcentajes a mano y uno absorba el resto. */
+const pct = (n: number, total: number) => `${((100 * n) / total).toFixed(1)}%`;
 
 /* R² fuera de muestra, dentro de temporada, sobre la anomalía nacional, sin fuga.
    `general/overview.md`: 0.772 a h=1 y 0.450 a h=2; 0.274 a h=3 y negativo desde h=4. */
@@ -31,12 +47,13 @@ const HORIZONTE = [
 const ALTO_MAX = 148;   // px, la celda de h=1
 const ALTO_HUECO = 26;  // px, el pozo `sin dato` de la cinta
 
-export function Metodo({ index }: { index?: Index }) {
+export function Metodo({ index, nacional }: Datos) {
+  const d = { index, nacional };
   return (
     <div className="portada">
       <Muro />
-      <Renuncias />
-      <Queda index={index} />
+      <Renuncias d={d} />
+      <Queda d={d} />
     </div>
   );
 }
@@ -111,7 +128,9 @@ type Renuncia = {
   queda: ReactNode;
 };
 
-const RENUNCIAS: Renuncia[] = [
+/* Una función de los datos, no una constante. Es el cambio más chico que permite que CUALQUIERA de
+   las nueve lea del export en vez de afirmar de memoria. */
+const RENUNCIAS = (d: Datos): Renuncia[] => [
   {
     n: "02",
     titulo: "No muestra una probabilidad.",
@@ -157,8 +176,9 @@ const RENUNCIAS: Renuncia[] = [
     ),
     queda: (
       <>Un solo acento, y <b>solo donde el modelo habló</b>. La calma no lleva color en absoluto,
-      que es lo correcto cuando el 94% de las semanas-servicio no llevan aviso. El acuerdo y el
-      desacuerdo se codifican en <b>geometría</b>: azul = avisamos, sobre la regla = ocurrió.</>
+      que es lo correcto cuando el {Math.round(100 - (100 * d.nacional.alertas) / semanasServicio(d))}%
+      {" "}de las semanas-servicio no llevan aviso. El acuerdo y el desacuerdo se codifican en
+      {" "}<b>geometría</b>: azul = avisamos, sobre la regla = ocurrió.</>
     ),
   },
   {
@@ -209,19 +229,29 @@ const RENUNCIAS: Renuncia[] = [
   },
   {
     n: "07",
-    titulo: "No alerta a 446 servicios que sí modela.",
+    titulo: `No alerta a ${d.nacional.cobertura.ambulatorios} servicios que sí modela.`,
     medida: (
       <Figura
-        pie="632 servicios en el panel. Los 446 ambulatorios cargan el 73.7% de las atenciones respiratorias y no tienen camas."
+        pie={`${d.nacional.cobertura.panel} servicios en el panel. Los `
+          + `${d.nacional.cobertura.ambulatorios} ambulatorios cargan el `
+          + `${d.nacional.cobertura.share_ambulatorio}% de las atenciones respiratorias `
+          + `(${d.nacional.cobertura.anios[0]}–${d.nacional.cobertura.anios[1]}) y no tienen camas. `
+          + `Otros ${d.nacional.cobertura.otros} no son ninguna de las dos cosas.`}
         cuerpo={
           <div className="reparto">
+            {/* Tres segmentos, no dos. La versión anterior dibujaba 70.6% / 29.4% — que suman 100
+                metiendo del lado avisado a los cuatro servicios sin clasificar, y con eso decía
+                186 donde la lista de alerta tiene 180. Ahora los anchos salen de los conteos y
+                cierran porque las tres clases agotan el panel; el export lo afirma. */}
             <div className="reparto__pista">
-              <b className="reparto__ambul" style={{ width: "70.6%" }} />
-              <b className="reparto__hosp" style={{ width: "29.4%" }} />
+              <b className="reparto__ambul" style={{ width: pct(d.nacional.cobertura.ambulatorios, d.nacional.cobertura.panel) }} />
+              <b className="reparto__hosp" style={{ width: pct(d.nacional.cobertura.ueh, d.nacional.cobertura.panel) }} />
+              <b className="reparto__otros" style={{ width: pct(d.nacional.cobertura.otros, d.nacional.cobertura.panel) }} />
             </div>
             <p className="reparto__claves">
-              <span><i className="llave" />446 ambulatorios · sin aviso</span>
-              <span><i className="llave llave--alertada" />180 urgencias hospitalarias · con aviso</span>
+              <span><i className="llave llave--revisada" />{d.nacional.cobertura.ambulatorios} ambulatorios · sin aviso</span>
+              <span><i className="llave llave--alertada" />{d.nacional.cobertura.ueh} urgencias hospitalarias · con aviso</span>
+              <span><i className="llave" />{d.nacional.cobertura.otros} sin clasificar · sin aviso</span>
             </p>
           </div>
         }
@@ -279,10 +309,10 @@ const RENUNCIAS: Renuncia[] = [
   },
 ];
 
-function Renuncias() {
+function Renuncias({ d }: { d: Datos }) {
   return (
     <section className="renuncias" aria-label="Las ocho renuncias restantes">
-      {RENUNCIAS.map((r) => <Bloque key={r.n} r={r} />)}
+      {RENUNCIAS(d).map((r) => <Bloque key={r.n} r={r} />)}
     </section>
   );
 }
@@ -326,14 +356,16 @@ function Cifra({ valor, unidad, pie }: { valor: string; unidad: string; pie: str
    El cierre se ancla en el número más incómodo del proyecto, no en el mejor. Un evaluador que
    llegue hasta acá se lleva el margen honesto a h=2, no la cifra de titular a h=1. */
 
-function Queda({ index }: { index?: Index }) {
+function Queda({ d }: { d: Datos }) {
+  const index = d.index;
   const ref = useReveal<HTMLElement>();
   return (
     <section className="queda" ref={ref} aria-labelledby="queda-t">
       <h2 className="queda__titulo" id="queda-t">Lo que quedó en pie.</h2>
 
       <p className="queda__entrada">
-        Un clasificador sobre seis features, en <b>180 urgencias hospitalarias</b>, avisando con dos
+        Un clasificador sobre seis features, en <b>{d.nacional.cobertura.ueh} urgencias
+        hospitalarias</b>, avisando con dos
         semanas contra el propio umbral histórico de cada servicio. Contra la climatología
         estacional en la temporada 2026 sellada — pre-registrada y abierta una sola vez — el margen
         a h=2 fue <b>2.69×</b> sobre un piso exigido de 2×.
@@ -382,13 +414,13 @@ function Queda({ index }: { index?: Index }) {
         como ausencia en la especificación en vez de aparecer como una conversación que no ocurrió.
       </p>
 
-      {index && (
-        <p className="nota nota--linea">
-          Fuente DEIS hasta la semana {index.settled_through[1]} de {index.settled_through[0]},
-          la última cerrada · exportado el {index.stamp} · todo el sitio es estático y se
-          reconstruye desde el mismo trabajo semanal.
-        </p>
-      )}
+      {/* La ruta ya espera al índice antes de montar, así que la guarda `index &&` que había acá
+          era código muerto desde que las cifras pasaron a leerse del export. */}
+      <p className="nota nota--linea">
+        Fuente DEIS hasta la semana {index.settled_through[1]} de {index.settled_through[0]},
+        la última cerrada · exportado el {index.stamp} · todo el sitio es estático y se
+        reconstruye desde el mismo trabajo semanal.
+      </p>
     </section>
   );
 }

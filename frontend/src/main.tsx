@@ -82,8 +82,8 @@ function App() {
       )}
 
       {portada ? <PortadaRoute />
-        : metodo ? <Metodo index={index} />
-        : evidencia ? <Evidence />
+        : metodo ? <MetodoRoute />
+        : evidencia ? <EvidenceRoute />
         : servicios ? <ExplorerRoute />
         : tail === "ahora" ? <LiveRoute code={head} />
         : <FacilityRoute code={head} />}
@@ -152,6 +152,26 @@ function PortadaRoute() {
   const { data: index } = useAsync<Index>(loadIndex, "index");
   if (!nacional || !index) return <p className="cargando">Cargando…</p>;
   return <Portada nacional={nacional} index={index} />;
+}
+
+/** `#/metodo` pasó a leer sus cifras de cobertura del export (item G, clase A), así que necesita
+    el payload nacional además del índice. **No agrega una petición al presupuesto**: `data.ts`
+    cachea por ruta y `#/` ya trae los mismos dos archivos, así que llegar por cualquiera de los dos
+    caminos cuesta lo mismo. AC-G4. */
+function MetodoRoute() {
+  const { data: nacional } = useAsync<Nacional>(loadNacional, "nacional");
+  const { data: index } = useAsync<Index>(loadIndex, "index");
+  if (!nacional || !index) return <p className="cargando">Cargando…</p>;
+  return <Metodo index={index} nacional={nacional} />;
+}
+
+/** `#/evidencia` lee su ÁMBITO del export por la misma razón que `#/metodo` (item G, clase A).
+    Sus rangos pre-registrados y sus efectos auditados NO: nada los recomputa, así que siguen
+    siendo literales fechados. */
+function EvidenceRoute() {
+  const { data: nacional } = useAsync<Nacional>(loadNacional, "nacional");
+  if (!nacional) return <p className="cargando">Cargando…</p>;
+  return <Evidence nacional={nacional} />;
 }
 
 function ExplorerRoute() {

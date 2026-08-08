@@ -76,6 +76,25 @@ export type Live = Facility & {
     away for every other reader. */
 export type Region = { nombre: string; servicios: number; serie: (number | null)[] };
 
+/** Backlog item G, class A: the figures the WEEKLY refresh moves, in CI, with nobody watching.
+    `#/metodo` and `#/evidencia` stated these in prose and had already drifted — the pages said 446
+    ambulatory facilities carrying 73.7% of attentions when the panel held 448 carrying 72.6%, and
+    named no window for the percentage. Read at render time there is nothing left to desynchronise.
+
+    The three counts EXHAUST the panel, and `otros` is why: 180 + 448 is 628, not 632. Four
+    facilities are neither (two `Urgencia Especializada`, two with no type at all). The old
+    two-segment bar folded them into the alerted side to make the widths close. */
+export type Cobertura = {
+  panel: number;
+  ueh: number;
+  ambulatorios: number;
+  otros: number;
+  /** Percent of respiratory attentions, over the whole panel — `anios`, COVID years excluded. */
+  share_ambulatorio: number;
+  share_ueh: number;
+  anios: [number, number];
+};
+
 export type Nacional = {
   season: number;
   stamp: string;
@@ -88,6 +107,7 @@ export type Nacional = {
   servicios: number;
   alertas: number;
   alzas: number;
+  cobertura: Cobertura;
 };
 
 export const loadIndex = () => load<Index>("data/facilities.json");

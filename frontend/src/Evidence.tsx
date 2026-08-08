@@ -26,7 +26,13 @@
  * 2026-08-03: added ficha 4b, the abandonment test, which is the first entry on this page that
  * DID NOT PASS. It also retires a sentence this page used to carry — that the ambulatory 74% was
  * "formalmente no verificable" — which the test itself falsified. Two claims elsewhere on the page
- * were corrected with it. */
+ * were corrected with it.
+ *
+ * 2026-08-08: the sentence above — "they are published results, not runtime data — this file is
+ * the one place to update them" — is now true of the CLASS C figures only. See the note above
+ * `Evidence` for the split and for why the boundary falls per sentence rather than per number. */
+
+import type { Nacional } from "./data";
 
 /** Where the outcome falls on its own predicted range. The band occupies the middle 60% of the
  *  track so a prediction that missed still lands on screen — which is the point of drawing it. */
@@ -114,7 +120,24 @@ const TRAMPAS = [
    "Las tablas imprimen lo que se midió. Pero el ajuste, aunque reproducible desde el 2026-07-30, sigue siendo sensible: permutar el orden de las filas mueve el lift de 2026 a h=1 entre 7.94 y 8.31. Una afirmación que descansaba en 0.002 no sobrevivió a eso."],
 ];
 
-export function Evidence() {
+/* Backlog item G en esta superficie. Las cifras de acá se separan por QUIÉN LAS MUEVE:
+ *
+ *  CLASE A — el refresco semanal las mueve, en CI, sin nadie mirando. El alcance del producto
+ *    (cuántas urgencias hospitalarias) y el share de volumen ambulatorio cuando se afirma EN
+ *    PRESENTE. Se leen de `nacional.json` / `facilities.json`. Ya habían derivado: 446 -> 448 y
+ *    73.7% -> 72.6%.
+ *
+ *  CLASE C — mediciones de una sola vez que nada recomputa: los rangos pre-registrados, el IC del
+ *    abandono, el efecto auditado. Siguen como literales A PROPÓSITO. Emitirlas desde un pipeline
+ *    les inventaría una frescura que no tienen; su único modo de falla es alejarse del REGISTRO, y
+ *    eso se arregla con procedencia, no con plomería.
+ *
+ *  ⚠ Y la frontera NO cae por número, cae por FRASE. «Los 446 ambulatorios» describe, en las dos
+ *    fichas de validación de constructo, la POBLACIÓN SOBRE LA QUE CORRIÓ un test pre-registrado en
+ *    una vintage concreta. Actualizar ese 446 a 448 haría que el texto describiera mal el test que
+ *    dice describir. Esas dos quedan literales, fechadas. El mismo número en presente — «tres
+ *    cuartas partes del volumen SIGUEN sin validar» — sí es clase A y sí se lee del export. */
+export function Evidence({ nacional }: { nacional: Nacional }) {
   return (
     <section className="pliego">
       <header className="pliego__tramo">
@@ -149,7 +172,8 @@ export function Evidence() {
 
         <figure className="registro__caja">
           <table className="registro">
-            <caption>Recall de alzas nuevas a h=2 · gasto igualado · 180 urgencias hospitalarias</caption>
+            {/* clase A: el alcance del producto, en presente — se lee del export */}
+            <caption>Recall de alzas nuevas a h=2 · gasto igualado · {nacional.cobertura.ueh} urgencias hospitalarias</caption>
             <thead>
               <tr>
                 <th scope="col">Temporada</th>
@@ -191,7 +215,7 @@ export function Evidence() {
         <div className="ficha__cuerpo">
           <p className="protocolo">
             <span><b>Temporada</b> 2026 · semanas 1–28</span>
-            <span><b>Ámbito</b> 180 urgencias hospitalarias</span>
+            <span><b>Ámbito</b> {nacional.cobertura.ueh} urgencias hospitalarias</span>
             <span><b>Entrenamiento</b> 2022–2025</span>
             <span><b>Corte calibrado en</b> 2025</span>
             <span><b>Resultado primario</b> lift a h=2</span>
@@ -404,10 +428,12 @@ export function Evidence() {
               para este producto, se lo inventó.
             </li>
             <li>
-              Absolutamente nada sobre los 446 servicios ambulatorios que cargan el 73.7% del
-              volumen. No aparecen en ningún informe de camas. <strong>Se dijo aquí que eran
-              «formalmente no verificables»; era falso y se retiró</strong> — la ficha siguiente los
-              somete a prueba por otra vía.
+              {/* Clase C: describe la población del test REM20 tal como era cuando corrió, no el
+                  panel de hoy. Actualizarla haría que el texto describiera mal el test. */}
+              Absolutamente nada sobre los 446 servicios ambulatorios que cargaban el 73.7% del
+              volumen <i>al correr esta prueba</i>. No aparecen en ningún informe de camas.{" "}
+              <strong>Se dijo aquí que eran «formalmente no verificables»; era falso y se
+              retiró</strong> — la ficha siguiente los somete a prueba por otra vía.
             </li>
           </ul>
         </div>
@@ -422,7 +448,8 @@ export function Evidence() {
         <div className="ficha__cuerpo">
           <p>
             La ficha anterior valida el objetivo contra camas, y las camas solo existen en
-            hospitales. Los 446 servicios ambulatorios quedaban fuera por construcción. El manual
+            hospitales. Los 446 servicios ambulatorios de entonces quedaban fuera por
+            construcción. El manual
             oficial del REM define <code>TOTAL DEMANDA</code> como todos los que generaron un DAU{" "}
             <em>incluidos los que abandonaron antes del alta médica</em> — y ese registro sí existe
             para SAPU, SAR y SUR. Entonces{" "}
@@ -531,8 +558,10 @@ export function Evidence() {
         <ul className="ausencias">
           <li>
             <b>Tres cuartas partes del volumen siguen sin validar, pero ya no por no haberlo
-            intentado.</b> Los 446 servicios ambulatorios — SAPU, SAR y SUR — cargan el 73.7% de las
-            atenciones respiratorias y no tienen denominador de <em>capacidad</em> en ninguna parte
+            intentado.</b> Los {nacional.cobertura.ambulatorios} servicios ambulatorios — SAPU, SAR y
+            SUR — cargan el {nacional.cobertura.share_ambulatorio}% de las atenciones respiratorias
+            ({nacional.cobertura.anios[0]}–{nacional.cobertura.anios[1]}) y no tienen denominador de
+            <em> capacidad</em> en ninguna parte
             de los datos: no tienen camas. Se los probó por el lado de la <em>demanda</em>, con los
             abandonos antes del alta, y <strong>ese test no pasó</strong>. La frase honesta es
             «probado el 2026-08-03 y no encontrado», que es peor para el producto y mejor como

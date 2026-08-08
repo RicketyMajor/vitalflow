@@ -16,7 +16,8 @@
     "types": ["vite/client"]
   },
   "include": ["src"],
-  // Runs under node's own type stripping (`npm run check`), which needs the `.ts` import
-  // extensions this config forbids. It is verified by running, not by tsc.
-  "exclude": ["src/season.check.ts"]
+  // Both run under node's own type stripping (`npm run check`) and reach for node built-ins this
+  // browser-facing config has no types for. They are verified by running, not by tsc — which is
+  // also why `contraste.check.ts` reads `styles.css` off disk instead of importing it.
+  "exclude": ["src/season.check.ts", "src/contraste.check.ts"]
 }
