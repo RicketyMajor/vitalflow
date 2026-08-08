@@ -21,7 +21,7 @@
   position: fixed; top: calc(var(--u) * 3); right: calc(var(--u) * 3); z-index: 30;
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.09em;
   color: var(--rotulo); background: var(--pizarra);
-  border: 1px solid var(--borde); border-radius: var(--r-chico);
+  border: 1px solid var(--borde-est); border-radius: var(--r-chico);
   padding: calc(var(--u) * 1.5) calc(var(--u) * 2.5); cursor: pointer;
   /* color y borde: orienta, no desplaza — sigue corriendo con reduced-motion */
   transition: color var(--dur-orienta) ease, border-color var(--dur-orienta) ease;
@@ -33,7 +33,7 @@
    cuatro superficies de lectura y estorba a la única que usa el viewport entero. */
 .hoja--entrada {
   max-width: none; gap: 0;
-  margin: calc(var(--u) * -9) calc(var(--u) * -5) calc(var(--u) * -16);
+  margin: calc(var(--pad-t) * -1) calc(var(--pad-x) * -1) calc(var(--pad-b) * -1);
 }
 .entrada { display: flex; flex-direction: column; }
 .entrada b { font-weight: 600; }
@@ -304,7 +304,7 @@
 .acceso__via {
   display: flex; flex-direction: column; gap: calc(var(--u) * 2);
   padding: calc(var(--u) * 5);
-  border: 1px solid var(--borde); border-radius: var(--r-medio);
+  border: 1px solid var(--borde-est); border-radius: var(--r-medio);
   background: var(--pizarra); text-decoration: none;
   /* El caso instructivo del reparto: UNA declaración partida en los dos canales. El borde orienta
      y sobrevive; el desplazamiento es decorativo y se apaga (`transform: none` en el bloque de
@@ -329,7 +329,8 @@
 }
 
 @media (max-width: 620px) {
-  .hoja--entrada { margin-left: calc(var(--u) * -5); margin-right: calc(var(--u) * -5); }
+  /* La cancelación del padding del body ya NO se repite acá: sale de `--pad-*`, que este mismo
+     breakpoint re-apunta en `styles.css`. Repetirla es lo que produjo los 8px de desborde. */
   .pais__fijo, .escala, .que, .acceso, .mecanismo__fijo { padding-left: calc(var(--u) * 4); padding-right: calc(var(--u) * 4); }
   .escala, .que { padding-top: calc(var(--u) * 16); padding-bottom: calc(var(--u) * 16); }
   .acceso { padding-top: calc(var(--u) * 16); }

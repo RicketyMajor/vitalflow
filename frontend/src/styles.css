@@ -16,6 +16,27 @@
   --hueco:     #dfe4e1;   /* inset wells, unwatched weeks */
   --borde:     rgba(20, 26, 24, 0.11);
   --borde-int: rgba(20, 26, 24, 0.07);
+  /* ---- A4, resuelta el 2026-08-08: CAJA CERRADA = ARQUITECTURA, REGLA ABIERTA = PUNTUACIÓN ----
+     La línea se traza sobre la FORMA del borde, no sobre el gusto, igual que `--dur-orienta` /
+     `--mov` se traza sobre la propiedad. Un `border:` de caja completa dibuja el canto de un
+     objeto y sube a `--borde-est`; un `border-top/bottom/left` es puntuación entre secciones y
+     se queda capilar en `--borde` / `--borde-int`.
+
+     Por qué dejó de alcanzar 1.25:1. El argumento para aceptarlo era que la tarjeta «ya está
+     distinguida por su fondo», así que el borde sería decorativo. Se midió el fondo:
+     `--pizarra` contra `--muro` da **1.12:1 en claro y 1.09 en oscuro** — MÁS DÉBIL que el
+     borde. El fondo no distingue nada; el canto de una tarjeta es el borde y nada más, y este
+     mundo declara profundidad SÓLO por bordes.
+
+     Sigue sin ser violación de SC 1.4.11 — un divisor decorativo está exento — y no se reporta
+     como tal. Es oficio, y el costo aceptado es que el mundo queda algo más arquitectónico.
+
+     Los valores salen de resolver el piso 2.0:1 en las TRES composiciones en que aparece el
+     borde, por tema; el que manda es distinto en cada uno (en claro el canto exterior, en
+     oscuro la caja sin fondo). Medido por `contraste.check.ts`, que lee este archivo.
+     NO se aplica a gráficos con significado: `.semana--objetivo-calma` y `.llave--objetivo-calma`
+     caen bajo 1.4.11 a 3:1, que es una afirmación distinta y más fuerte. Ver `--borde` ahí. */
+  --borde-est: rgba(20, 26, 24, 0.36);   /* 2.02 canto exterior · 2.25 interior · 2.22 sin fondo */
   --tinta:     #141a18;
   /* La rampa de grises se RE-ESPACIÓ el 2026-08-08 a objetivos medidos, no elegidos a mano.
      `--tenue` estaba en 2.59:1 contra el muro y 2.89:1 contra la pizarra — falla 4.5:1 y lleva
@@ -38,6 +59,16 @@
   --u: 4px;
   --r-chico: 3px;
   --r-medio: 6px;
+
+  /* El padding del `body`, como TOKEN y no como literal, porque tiene un segundo lector:
+     `.hoja--entrada` (la portada, que va a sangre) lo cancela con márgenes negativos. Estaba
+     escrito repitiendo los tres valores, o sea una segunda copia — y derivó exactamente como una
+     segunda copia deriva: a ≤620px el body bajó a 12/24/40 y la cancelación se quedó en −20/−36/−64,
+     así que `#/` se salía 8px por lado a 390 (medido: scrollWidth 383 contra clientWidth 375) y
+     además tiraba 12px de más hacia arriba. Un solo valor, dos lectores. Regla 41. */
+  --pad-x: calc(var(--u) * 5);
+  --pad-t: calc(var(--u) * 9);
+  --pad-b: calc(var(--u) * 16);
 
   /* ---- movimiento -------------------------------------------------------------------------
      DOS canales, y la línea se traza sobre la PROPIEDAD, no sobre el gusto:
@@ -77,6 +108,7 @@
   :root {
     --muro: #0f1412; --pizarra: #161d1a; --hueco: #1e2623;
     --borde: rgba(232,237,234,0.10); --borde-int: rgba(232,237,234,0.06);
+    --borde-est: rgba(232,237,234,0.25);   /* 2.29 canto exterior · 2.11 interior · 2.07 sin fondo */
     --tinta: #e8edea; --rotulo: #9ba9a2; --tenue: #7b8782;
     --alerta: #7fb0e6; --alerta-df: rgba(127,176,230,0.16); --campana: rgba(127,176,230,0.10); --opera: rgba(232,237,234,0.045);
   }
@@ -84,12 +116,14 @@
 :root[data-theme="dark"] {
   --muro: #0f1412; --pizarra: #161d1a; --hueco: #1e2623;
   --borde: rgba(232,237,234,0.10); --borde-int: rgba(232,237,234,0.06);
+  --borde-est: rgba(232,237,234,0.25);
   --tinta: #e8edea; --rotulo: #9ba9a2; --tenue: #7b8782;
   --alerta: #7fb0e6; --alerta-df: rgba(127,176,230,0.16); --campana: rgba(127,176,230,0.10); --opera: rgba(232,237,234,0.045);
 }
 :root[data-theme="light"] {
   --muro: #e9edea; --pizarra: #f7f9f7; --hueco: #dfe4e1;
   --borde: rgba(20,26,24,0.11); --borde-int: rgba(20,26,24,0.07);
+  --borde-est: rgba(20,26,24,0.36);
   --tinta: #141a18; --rotulo: #46514d; --tenue: #636c67;
   --alerta: #1f4a7a; --alerta-df: rgba(31,74,122,0.12); --campana: rgba(31,74,122,0.075); --opera: rgba(20,26,24,0.035);
 }
@@ -105,7 +139,7 @@ body {
   font-size: 15px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
-  padding: calc(var(--u) * 9) calc(var(--u) * 5) calc(var(--u) * 16);
+  padding: var(--pad-t) var(--pad-x) var(--pad-b);
 }
 
 .hoja { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column;
@@ -157,7 +191,7 @@ a:focus-visible, [tabindex]:focus-visible, input:focus-visible, button:focus-vis
 /* ---- the board ------------------------------------------------------------ */
 .pantalla { display: flex; flex-direction: column; gap: calc(var(--u) * 3); }
 
-.tablero { background: var(--pizarra); border: 1px solid var(--borde);
+.tablero { background: var(--pizarra); border: 1px solid var(--borde-est);
            border-radius: var(--r-medio); overflow: hidden; }
 
 .barra { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 2) calc(var(--u) * 4);
@@ -324,12 +358,12 @@ a:focus-visible, [tabindex]:focus-visible, input:focus-visible, button:focus-vis
 /* ---- explorer: search + list ---------------------------------------------- */
 .buscador { display: flex; flex-direction: column; gap: calc(var(--u) * 2); }
 .buscador input { font-family: var(--mono); font-size: 14px; color: var(--tinta);
-                  background: var(--pizarra); border: 1px solid var(--borde);
+                  background: var(--pizarra); border: 1px solid var(--borde-est);
                   border-radius: var(--r-medio); padding: calc(var(--u) * 3) calc(var(--u) * 4);
                   width: 100%; }
 .buscador input::placeholder { color: var(--tenue); }
 
-.listado { background: var(--pizarra); border: 1px solid var(--borde);
+.listado { background: var(--pizarra); border: 1px solid var(--borde-est);
            border-radius: var(--r-medio); overflow: hidden; }
 .listado a { display: grid; grid-template-columns: 1fr auto; gap: calc(var(--u) * 1)
              calc(var(--u) * 4); align-items: baseline; text-decoration: none;
@@ -386,7 +420,7 @@ code { font-family: var(--mono); font-size: 0.92em; color: var(--tinta);
                                            color: var(--alerta); }
 
 /* a callout that turns a result against itself — used twice, both times deliberately */
-.advertencia { border: 1px solid var(--borde); border-radius: var(--r-medio);
+.advertencia { border: 1px solid var(--borde-est); border-radius: var(--r-medio);
                padding: calc(var(--u) * 4) calc(var(--u) * 5); background: var(--muro); }
 .advertencia b { color: var(--tinta); font-weight: 600; }
 /* a claim this project published and then withdrew. It stays on the page. */
@@ -395,7 +429,7 @@ code { font-family: var(--mono); font-size: 0.92em; color: var(--tinta);
 .retirada s { text-decoration-color: var(--tenue); text-decoration-thickness: 1px; }
 
 /* ---- the record: what was written before, and what came back -------------- */
-.ficha { background: var(--pizarra); border: 1px solid var(--borde);
+.ficha { background: var(--pizarra); border: 1px solid var(--borde-est);
          border-radius: var(--r-medio); overflow: hidden; }
 .ficha__cabeza { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline;
                  gap: calc(var(--u) * 2) calc(var(--u) * 4);
@@ -405,7 +439,7 @@ code { font-family: var(--mono); font-size: 0.92em; color: var(--tinta);
 .ficha__cuerpo { padding: calc(var(--u) * 6) calc(var(--u) * 5) calc(var(--u) * 7);
                  display: flex; flex-direction: column; gap: calc(var(--u) * 4); }
 .veredicto { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
-             text-transform: uppercase; color: var(--rotulo); border: 1px solid var(--borde);
+             text-transform: uppercase; color: var(--rotulo); border: 1px solid var(--borde-est);
              border-radius: var(--r-chico); padding: 2px calc(var(--u) * 2); white-space: nowrap; }
 .protocolo { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 2) calc(var(--u) * 5);
              font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
@@ -425,7 +459,13 @@ code { font-family: var(--mono); font-size: 0.92em; color: var(--tinta);
 .contraste--despues p { color: var(--tinta); }
 
 /* ---- tables: the ledger --------------------------------------------------- */
-.registro__caja { overflow-x: auto; margin: calc(var(--u) * 2) 0; }
+/* `position: relative` NO es cosmético y no se borre: sin él la página entera se corre 90px en
+   horizontal a 390px. `.vsr` es `position: absolute`, así que su bloque contenedor es el `<html>`,
+   NO este scroller — y un scroller no recorta a un absoluto cuyo bloque contenedor está afuera.
+   Los dos «Dónde cayó» de `#/evidencia` viven dentro de la tabla, que a 390 está desplazada más
+   allá del viewport, así que arrastraban el `scrollWidth` del documento de 375 a 465. Medido
+   2026-08-08: con esta línea vuelve a 375 y `scrollX` a 0. */
+.registro__caja { position: relative; overflow-x: auto; margin: calc(var(--u) * 2) 0; }
 .registro { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px;
             font-variant-numeric: tabular-nums; white-space: nowrap; }
 .registro caption { text-align: left; font-size: 10.5px; letter-spacing: 0.1em;
@@ -502,7 +542,9 @@ code { font-family: var(--mono); font-size: 0.92em; color: var(--tinta);
 }
 
 @media (max-width: 620px) {
-  body { padding: calc(var(--u) * 6) calc(var(--u) * 3) calc(var(--u) * 10); }
+  /* Se re-apuntan los TOKENS, no el `padding`: así `.hoja--entrada` sigue cancelando lo que el
+     body realmente tiene en este breakpoint, sin saber que existe. */
+  :root { --pad-x: calc(var(--u) * 3); --pad-t: calc(var(--u) * 6); --pad-b: calc(var(--u) * 10); }
   .estado__titular { font-size: 30px; }
   .hecho { border-left: 0; border-top: 1px solid var(--borde-int); }
   .hecho:first-child { border-top: 0; }
@@ -749,7 +791,7 @@ code { font-family: var(--mono); font-size: 0.92em; color: var(--tinta);
 .queda__entrada b { color: var(--tinta); }
 
 /* el número incómodo, y va en tinta: es un margen medido, no algo que el modelo dijo */
-.margen { border: 1px solid var(--borde); border-radius: var(--r-medio);
+.margen { border: 1px solid var(--borde-est); border-radius: var(--r-medio);
           background: var(--pizarra); padding: calc(var(--u) * 6) calc(var(--u) * 5);
           display: flex; flex-direction: column; gap: calc(var(--u) * 5); }
 .margen__rotulo { font-family: var(--mono); font-size: 11.5px; line-height: 1.6;
@@ -769,7 +811,7 @@ code { font-family: var(--mono); font-size: 0.92em; color: var(--tinta);
 .margen__pie b { color: var(--tinta); }
 
 .salidas { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-           border: 1px solid var(--borde); border-radius: var(--r-medio); overflow: hidden;
+           border: 1px solid var(--borde-est); border-radius: var(--r-medio); overflow: hidden;
            background: var(--pizarra); }
 .salida { display: flex; flex-direction: column; gap: calc(var(--u) * 1.5);
           padding: calc(var(--u) * 5); text-decoration: none;

@@ -149,6 +149,22 @@ for (const [nombre, selectores] of TEMAS) {
     const r = ratio(res(a, pz), res(b, pz));
     linea(r >= min, r, min, `${a} vs ${b} — separacion entre escalones`);
   }
+
+  /* A4 — el canto de una caja cerrada. NO es 1.4.11: un divisor decorativo esta exento y esto no
+     se reporta como violacion. Es un piso de OFICIO, y existe porque se midio que el fondo de una
+     tarjeta (`--pizarra` sobre `--muro`) da 1.12 en claro y 1.09 en oscuro — mas debil que el
+     borde. En un mundo cuyo unico canal de profundidad son los bordes, el canto es el borde y nada
+     mas, asi que si el borde se cae la profundidad se cae entera.
+     Las TRES composiciones en que aparece, porque el que manda cambia con el tema: en claro el
+     canto exterior, en oscuro la caja sin fondo propio. */
+  console.log(`  --- el canto estructural (A4, piso de oficio 2.0) ---`);
+  const pz = res("--pizarra", muro);
+  const ESTRUCTURA: [RGB, RGB, string][] = [
+    [sobre(T["--borde-est"], pz), muro, "canto exterior — borde de tarjeta contra el muro"],
+    [sobre(T["--borde-est"], pz), pz, "canto interior — el mismo borde contra su relleno"],
+    [sobre(T["--borde-est"], muro), muro, "caja sin fondo propio (.margen, .advertencia)"],
+  ];
+  for (const [fg, bg, uso] of ESTRUCTURA) linea(ratio(fg, bg) >= 2.0, ratio(fg, bg), 2.0, uso);
 }
 
 /* --- la ausencia se distingue por ALGUN canal (no depende del tema) --------------------------- */
