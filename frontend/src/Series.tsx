@@ -120,10 +120,21 @@ export function Series({ f }: { f: Facility }) {
           <text key={`x${w}`} x={x(w)} y={height - 2} textAnchor="middle">SEM {w}</text>
         ))}
 
-        {/* hit targets: full plot height, one per week, so a 15px column is easy to hover */}
+        {/* hit targets: full plot height, one per week, so a 15px column is easy to hover.
+            Focusable on purpose — the readout below is `aria-live`, so a keyboard reader gets the
+            same week-by-week reading a mouse does, and `<details>` carries the whole season.
+
+            ⚠ `role="button"` estaba acá y se quitó el 2026-08-09: estos rects no accionan nada, no
+            tienen `onKeyDown`, y Enter y Espacio no hacían nada — un rol que promete una acción
+            inexistente. Revelar una lectura al foco no es ser un botón.
+            ⚠ ABIERTO, y deliberadamente no resuelto acá: el `<svg role="img">` de arriba vuelve
+            PRESENTACIONAL a todo su subárbol, así que el `aria-label` de cada semana puede no
+            anunciarse mientras el teclado sí para en las 52. Se arregla sacándolas del orden de
+            tabulación o quitándole el rol al svg, y elegir entre las dos quiere el lector de
+            pantalla que sigue en la deuda. Ver handoff 036. */}
         {all.map((w) => (
           <rect key={`h${w}`} x={x(w) - step / 2} y={TOP} width={step} height={H + LANE}
-                fill="transparent" tabIndex={0} role="button" aria-label={`Semana ${w}`}
+                fill="transparent" tabIndex={0} aria-label={`Semana ${w}`}
                 onMouseEnter={() => setHover(w)} onFocus={() => setHover(w)} />
         ))}
       </svg>

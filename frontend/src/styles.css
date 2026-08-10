@@ -158,9 +158,33 @@ body {
 .hoja:not(.hoja--entrada):not(.hoja--portada) { padding-top: 44px; }
 
 a { color: inherit; }
-a:focus-visible, [tabindex]:focus-visible, input:focus-visible, button:focus-visible {
+/* ⚠ `[tabindex="-1"]` queda FUERA, y se estrechó el selector en vez de taparlo después: un −1 no es
+   alcanzable con Tab por definición, así que nunca fue destinatario de este anillo. El que lo
+   destapó es `<main tabIndex={-1}>`, destino del salto al contenido: con el selector ancho, saltar
+   dibujaba dos píxeles de acento alrededor de la página ENTERA. Estrechar es el arreglo de raíz;
+   un `main:focus-visible { outline: none }` habría sido una supresión sin reemplazo. */
+a:focus-visible, [tabindex]:not([tabindex="-1"]):focus-visible,
+input:focus-visible, button:focus-visible {
   outline: 2px solid var(--alerta); outline-offset: 2px; border-radius: var(--r-chico);
 }
+
+/* El salto al contenido: `.oculto` hasta que el foco lo pide, y entonces se planta arriba a la
+   izquierda, por encima de la barra (z-index 40). Hereda el anillo de la regla de arriba por ser
+   un `button`. Medido 2026-08-09: sin él son cinco paradas antes del contenido en las siete rutas,
+   y 187 en total en `#/servicios`. */
+.salto:focus-visible {
+  position: fixed; top: calc(var(--u) * 2); left: calc(var(--u) * 2); z-index: 50;
+  width: auto; height: auto; clip-path: none; overflow: visible;
+  background: var(--pizarra); color: var(--tinta);
+  border: 1px solid var(--borde-est); border-radius: var(--r-chico);
+  padding: calc(var(--u) * 2) calc(var(--u) * 4); font-size: 13px;
+}
+
+/* El landmark. No lleva layout propio —envuelve un solo hijo y el `gap` de `.hoja` ya cae donde
+   debe— salvo esto: un ítem flex nace con `min-width: auto` y no baja de su contenido, y este
+   proyecto tiene 42 filas medidas de `scrollWidth == clientWidth` que no se van a perder por un
+   envoltorio. */
+.hoja > main { min-width: 0; }
 /* `--mov: 0` apaga lo decorativo haciéndolo COMPLETAR en 0s, no borrándolo. Ver el bloque de
    movimiento en `:root`: borrar la animación de `brota` era lo único que mantenía visibles las seis
    barras del acto 1, y eso no debe depender de un `!important` global que nadie adivina.
@@ -380,10 +404,18 @@ a:focus-visible, [tabindex]:focus-visible, input:focus-visible, button:focus-vis
 
 .listado { background: var(--pizarra); border: 1px solid var(--borde-est);
            border-radius: var(--r-medio); overflow: hidden; }
+/* 180 filas, y la respuesta es nativa: `content-visibility: auto` deja sin maquetar lo que está
+   fuera de pantalla, sin librería y sin virtualizar a mano. `contain-intrinsic-size: auto <alto>`
+   lleva el `auto` a propósito — el navegador recuerda el alto real tras el primer render, así que
+   los 88px solo gobiernan la primera pintada y no son una cifra que pueda derivar.
+   88px es MEDIDO (2026-08-09, fila del explorador a 1425 de ancho), no estimado: con los 64px que
+   escribí primero, las 180 filas suman 11.520 en vez de los ~16.021 reales y la barra de scroll
+   pega un salto en cuanto el navegador mide de verdad. */
 .listado a { display: grid; grid-template-columns: 1fr auto; gap: calc(var(--u) * 1)
              calc(var(--u) * 4); align-items: baseline; text-decoration: none;
              padding: calc(var(--u) * 3) calc(var(--u) * 5);
-             border-top: 1px solid var(--borde-int); }
+             border-top: 1px solid var(--borde-int);
+             content-visibility: auto; contain-intrinsic-size: auto 88px; }
 .listado a:first-child { border-top: 0; }
 .listado a:hover { background: var(--muro); }
 .listado a strong { font-weight: 600; font-size: 14px; grid-area: 1 / 1; }

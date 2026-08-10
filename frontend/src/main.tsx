@@ -76,6 +76,16 @@ function App() {
       {/* AC-N1/N2 — en las SIETE rutas. Las dos narrativas la revelan al salir del primer
           viewport; las otras cinco la llevan desde el primer píxel. El agujero que esto cierra:
           `#/` y `#/metodo` no tenían salida persistente y sus puertas estaban al final. */}
+      {/* La PRIMERA parada de tabulación de las siete rutas, y va antes de `<Barra>` porque
+          saltarse la barra es justo lo que hace. El agujero estaba medido (2026-08-09): hay CINCO
+          paradas antes del contenido en todas las rutas, y `#/servicios` tiene 187 en total.
+          ⚠ Un botón y no `<a href="#contenido">`: el router lee `location.hash` como ruta, así que
+          un ancla dejaría `head = "contenido"` y la línea de abajo saldría a buscar un servicio con
+          ese código. El destino es `<main tabIndex={-1}>`, que no agrega una parada. */}
+      <button type="button" className="oculto salto"
+              onClick={() => document.getElementById("contenido")?.focus()}>
+        Saltar al contenido
+      </button>
       <Barra narrativa={propio} />
       {!propio && (
         <header className="encabezado">
@@ -90,12 +100,18 @@ function App() {
         </header>
       )}
 
-      {portada ? <PortadaRoute />
-        : metodo ? <MetodoRoute />
-        : evidencia ? <EvidenceRoute />
-        : servicios ? <ExplorerRoute />
-        : tail === "ahora" ? <LiveRoute code={head} />
-        : <FacilityRoute code={head} />}
+      {/* El landmark que no existía en ninguna de las siete rutas. Cada ruta devuelve UN elemento,
+          así que `<main>` envuelve exactamente uno y el `gap` de `.hoja` sigue cayendo donde caía
+          —entre el encabezado y esto— sin una regla nueva. `min-width: 0` en el CSS es lo único
+          que se agrega, y es para no arriesgar las 42 filas de `scrollWidth == clientWidth`. */}
+      <main id="contenido" tabIndex={-1}>
+        {portada ? <PortadaRoute />
+          : metodo ? <MetodoRoute />
+          : evidencia ? <EvidenceRoute />
+          : servicios ? <ExplorerRoute />
+          : tail === "ahora" ? <LiveRoute code={head} />
+          : <FacilityRoute code={head} />}
+      </main>
     </div>
   );
 }

@@ -7,6 +7,17 @@
     <meta name="description" content="Pronóstico semanal de demanda respiratoria en las 180 urgencias hospitalarias de Chile, a dos semanas, contra el propio percentil 90 de cada servicio. Construido solo con datos públicos." />
     <meta name="color-scheme" content="light dark" />
     <!--
+      El chrome del navegador móvil, igualado a `--muro` (el papel, que es el fondo del `body`) en
+      cada tema. Sin esto la barra del sistema se queda en su gris por defecto y el mundo termina
+      un centímetro antes de lo que debería.
+      ⚠ `media` solo puede leer la preferencia del SISTEMA: un visitante que elija el tema contrario
+      con el botón de la barra verá el chrome del otro. `<meta>` no reacciona a `[data-theme]` y no
+      hay forma declarativa de que lo haga — escribirlo desde JS sería una tercera copia de estos
+      dos valores, que es exactamente la deriva de la regla 41. Se acepta el desajuste.
+    -->
+    <meta name="theme-color" content="#E0DCD5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#101210" media="(prefers-color-scheme: dark)" />
+    <!--
       The theme the visitor chose, applied before first paint. Without it a visitor who picked light
       on a dark-mode machine sees one frame of the wrong world on every load — React cannot write
       the attribute until after it hydrates. Nothing is written when they have never chosen, so the
